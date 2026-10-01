@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@expo/metro-runtime": "57.0.16",
     "@katapatha/api-client": "workspace:*",
     "@katapatha/contracts": "workspace:*",
     "@katapatha/core": "workspace:*",
@@ -28,11 +29,12 @@
     "react-native-svg": "15.15.4"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
+    "@react-native/js-polyfills": "0.87.1",
     "@types/node": "24.19.0",
     "@types/react": "19.2.2",
     "eslint": "9.39.5",
     "eslint-plugin-react-hooks": "7.1.1",
+    "typescript": "5.9.3",
     "typescript-eslint": "8.71.0",
     "vitest": "5.0.2"
   }

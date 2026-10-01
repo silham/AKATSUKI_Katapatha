@@ -185,6 +185,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@expo/metro-runtime':
+        specifier: 57.0.16
+        version: 57.0.16
       '@katapatha/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
@@ -231,6 +234,9 @@ importers:
         specifier: 15.15.4
         version: 15.15.4(react-native@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.2)(react@19.2.8)(supports-color@10.2.2))(react@19.2.8)
     devDependencies:
+      '@react-native/js-polyfills':
+        specifier: 0.87.1
+        version: 0.87.1
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0

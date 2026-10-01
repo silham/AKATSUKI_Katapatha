@@ -23,8 +23,22 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules"),
 ];
-// pnpm's symlinked store means one package can otherwise be resolved through
-// two paths and bundled twice.
-config.resolver.disableHierarchicalLookup = true;
+// NOT disableHierarchicalLookup. It is tempting -- it stops one package being
+// resolved through two paths -- but pnpm DEPENDS on hierarchical lookup: every
+// package's own dependencies live in a nested node_modules inside the store
+// (node_modules/.pnpm/<pkg>@<hash>/node_modules/), and turning the walk-up off
+// makes expo-router unable to resolve its own peers.
+
+// react-native@0.87.1 no longer PUBLISHES rn-get-polyfills.js -- it is absent from
+// the `files` list in its package.json -- but @expo/metro-config@57.0.12 (the
+// version expo@57.0.26 pins, and the latest 57.0.x) still does
+// `require(<react-native>/rn-get-polyfills)` in its getPolyfills. So bundling
+// fails on Expo's own pinned combination, before any app code is reached.
+//
+// @react-native/js-polyfills is where those polyfills actually live now, and it
+// exports the identical "() => string[]" that Expo is calling. Wiring it directly
+// is the whole fix. Remove this once @expo/metro-config stops looking for the old
+// shim.
+config.serializer.getPolyfills = require("@react-native/js-polyfills");
 
 module.exports = config;
