@@ -1,15 +1,10 @@
-import { Text, View } from "react-native";
-import { color, space } from "@katapatha/tokens/tokens";
+import { Redirect } from "expo-router";
 
+/**
+ * The entry route sends everyone into the driver group, whose layout owns the
+ * guard. Keeping the decision in one place means there is one answer to "is this
+ * driver signed in" rather than two that can disagree.
+ */
 export default function Index() {
-  return (
-    <View style={{ flex: 1, padding: space.md, gap: space.xs }}>
-      <Text style={{ fontSize: 20, fontWeight: "600", color: color.ink }}>
-        Katapatha Driver
-      </Text>
-      <Text style={{ color: color.muted }}>
-        Scaffold in place. MOB1 owns src/outbox and auth; MOB2 owns src/screens.
-      </Text>
-    </View>
-  );
+  return <Redirect href="/(driver)" />;
 }

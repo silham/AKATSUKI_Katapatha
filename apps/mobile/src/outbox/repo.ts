@@ -413,3 +413,50 @@ export async function prune(sql: SqlDriver, now: Date): Promise<number> {
     [cutoff],
   );
 }
+
+/** One unconfirmed row, as the outbox screen shows it. */
+export type PendingRow = {
+  id: string;
+  stop_id: string;
+  type: OutboxEventInput["type"];
+  occurred_at: string;
+  state: OutboxState;
+  attempts: number;
+  last_error: string | null;
+  conflict_state: string | null;
+};
+
+/**
+ * Rows still to settle.
+ *
+ * Deliberately lists its columns instead of SELECT *: signature_data and
+ * photo_data must not be read to render a list, and a blob that is never read
+ * cannot end up in a log or a crash report.
+ */
+export async function readPendingRows(sql: SqlDriver): Promise<PendingRow[]> {
+  return sql.all<PendingRow>(
+    `SELECT id, stop_id, type, occurred_at, state, attempts, last_error, conflict_state
+       FROM outbox_event
+      WHERE state != 'confirmed'
+      ORDER BY id ASC`,
+  );
+}
+
+export type SyncLogRow = {
+  at: string;
+  endpoint: string;
+  sent: number | null;
+  accepted: number | null;
+  duplicates: number | null;
+  conflicts: number | null;
+  outcome: string;
+  note: string | null;
+};
+
+/** The last drain attempt, so the outbox screen can report what actually happened. */
+export async function readLastSync(sql: SqlDriver): Promise<SyncLogRow | null> {
+  return sql.first<SyncLogRow>(
+    `SELECT at, endpoint, sent, accepted, duplicates, conflicts, outcome, note
+       FROM sync_log ORDER BY seq DESC`,
+  );
+}

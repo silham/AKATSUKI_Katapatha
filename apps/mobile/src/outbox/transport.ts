@@ -68,8 +68,13 @@ export function createTransport(options: {
   client: () => Promise<Katapatha>;
   deviceId: () => Promise<string>;
   now?: () => Date;
-  /** True when pointed at the Prism mock. Enables the settle-by-position path. */
-  isMock?: () => boolean;
+  /**
+   * True when pointed at the Prism mock, which enables the settle-by-position
+   * path. Resolved per send rather than captured once, because the base URL can
+   * be changed at runtime from the Connection screen and a cached flag would go
+   * stale the moment it was.
+   */
+  isMock?: () => boolean | Promise<boolean>;
 }): Transport {
   const now = options.now ?? (() => new Date());
 
@@ -91,6 +96,7 @@ export function createTransport(options: {
 
       const client = await options.client();
       const deviceId = await options.deviceId();
+      const isMock = (await options.isMock?.()) ?? false;
       const events = rows.map(toBody);
 
       let result;
@@ -111,7 +117,7 @@ export function createTransport(options: {
       // Today's API: routes/sync.ts is a 501 stub. Regroup by stop and use the
       // online endpoint, which shares the server's applier.
       if (result.response.status === 501) {
-        return sendPerStop(client, deviceId, rows, options.isMock?.() ?? false);
+        return sendPerStop(client, deviceId, rows, isMock);
       }
 
       const failure = classify(result.response.status);
@@ -121,12 +127,7 @@ export function createTransport(options: {
         return { kind: "offline", error: "The server returned no body." };
       }
 
-      return readBatchResult(
-        "/sync/stop-events",
-        result.data,
-        rows,
-        options.isMock?.() ?? false,
-      );
+      return readBatchResult("/sync/stop-events", result.data, rows, isMock);
     },
   };
 }
