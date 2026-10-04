@@ -4,7 +4,9 @@
 # is first-party, CORS never applies, and SameSite never has to be relaxed.
 # The mobile app talks to the same /v1 prefix with a bearer token instead.
 :80 {
-	handle_path /v1/* {
+	# `handle`, not `handle_path`: the API's routes include the /v1 prefix, so
+	# stripping it sent /v1/health to /health and every call 404'd.
+	handle /v1/* {
 		reverse_proxy api:3001
 	}
 	handle {
