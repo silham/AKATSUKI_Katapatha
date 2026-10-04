@@ -88,8 +88,8 @@ users:
               type: array
               items: { $ref: "../components/schemas/admin.yaml#/AdminUser" }
             example:
-              - { id: "clx0usr1a2b3c4d5e6f7g8h9", email: "nimal@waypoint.lk", name: "Nimal Perera", role: DISPATCHER, depotCode: Peliyagoda, outletId: null, active: true, createdAt: "2026-09-28T02:00:00.000Z", lastSignInAt: "2026-10-04T01:00:00.000Z" }
-              - { id: "clx0usr4a2b3c4d5e6f7g8h9", email: "fathima@waypoint.lk", name: "Fathima Rizvi", role: STORE_MANAGER, depotCode: null, outletId: OUT074, active: true, createdAt: "2026-09-28T02:00:00.000Z", lastSignInAt: null }
+              - { id: "clx0usr1a2b3c4d5e6f7g8h9", email: "nimal@waypoint.lk", name: "Nimal Perera", role: DISPATCHER, depotCode: Peliyagoda, outletId: null, staffId: "DSP-0101", active: true, createdAt: "2026-09-28T02:00:00.000Z", lastSignInAt: "2026-10-04T01:00:00.000Z" }
+              - { id: "clx0usr4a2b3c4d5e6f7g8h9", email: "fathima@waypoint.lk", name: "Fathima Rizvi", role: STORE_MANAGER, depotCode: null, outletId: OUT074, staffId: "STR-0074", active: true, createdAt: "2026-09-28T02:00:00.000Z", lastSignInAt: null }
       "401": { $ref: "../components/responses/common.yaml#/Unauthorized" }
       "403": { $ref: "../components/responses/common.yaml#/Forbidden" }
   post:
@@ -107,7 +107,7 @@ users:
         content:
           application/json:
             schema: { $ref: "../components/schemas/admin.yaml#/AdminUser" }
-            example: { id: "clx0usr5a2b3c4d5e6f7g8h9", email: "kamal@waypoint.lk", name: "Kamal Jayasuriya", role: DRIVER, depotCode: Peliyagoda, outletId: null, active: true, createdAt: "2026-10-04T03:12:00.000Z", lastSignInAt: null }
+            example: { id: "clx0usr5a2b3c4d5e6f7g8h9", email: "kamal@waypoint.lk", name: "Kamal Jayasuriya", role: DRIVER, depotCode: Peliyagoda, outletId: null, staffId: "DRV-0310", active: true, createdAt: "2026-10-04T03:12:00.000Z", lastSignInAt: null }
       "401": { $ref: "../components/responses/common.yaml#/Unauthorized" }
       "403": { $ref: "../components/responses/common.yaml#/Forbidden" }
       "409": { $ref: "../components/responses/common.yaml#/Conflict" }
@@ -131,7 +131,7 @@ user:
         content:
           application/json:
             schema: { $ref: "../components/schemas/admin.yaml#/AdminUser" }
-            example: { id: "clx0usr5a2b3c4d5e6f7g8h9", email: "kamal@waypoint.lk", name: "Kamal Jayasuriya", role: DRIVER, depotCode: Peliyagoda, outletId: null, active: false, createdAt: "2026-10-04T03:12:00.000Z", lastSignInAt: null }
+            example: { id: "clx0usr5a2b3c4d5e6f7g8h9", email: "kamal@waypoint.lk", name: "Kamal Jayasuriya", role: DRIVER, depotCode: Peliyagoda, outletId: null, staffId: "DRV-0310", active: false, createdAt: "2026-10-04T03:12:00.000Z", lastSignInAt: null }
       "401": { $ref: "../components/responses/common.yaml#/Unauthorized" }
       "403": { $ref: "../components/responses/common.yaml#/Forbidden" }
       "404": { $ref: "../components/responses/common.yaml#/NotFound" }

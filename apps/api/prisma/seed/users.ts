@@ -21,12 +21,22 @@ export const DEMO_PASSWORD = "waypoint";
 
 export const STORE_ANCHOR_OUTLET = "OUT074";
 
+/** The loader's dock tablet badge, kept as named constants because the demo
+ *  scripts and docs refer to it. */
+export const DEMO_LOADER_STAFF_ID = "LDR-0142";
+export const DEMO_LOADER_PIN = "4826";
+
 export interface SeedUser {
   email: string;
   name: string;
   role: Role;
   depotCode?: string;
   outletId?: string;
+  /** The Waypoint staff ID and PIN every sign-in screen asks for (D-01,
+   *  L-01, R-01, S-01). Email and password still work for the native driver
+   *  app and the demo scripts. */
+  staffId: string;
+  pin: string;
   blurb: string;
 }
 
@@ -36,6 +46,8 @@ export const SEED_USERS: SeedUser[] = [
     name: "Nimal Perera",
     role: "DISPATCHER",
     depotCode: "Peliyagoda",
+    staffId: "DSP-0101",
+    pin: "2580",
     blurb: "Plans the day, decides the deferrals, watches the road.",
   },
   {
@@ -43,6 +55,8 @@ export const SEED_USERS: SeedUser[] = [
     name: "Ranjith Silva",
     role: "LOADER",
     depotCode: "Peliyagoda",
+    staffId: DEMO_LOADER_STAFF_ID,
+    pin: DEMO_LOADER_PIN,
     blurb: "Loads to the stop sequence and flags what is short.",
   },
   {
@@ -50,6 +64,8 @@ export const SEED_USERS: SeedUser[] = [
     name: "Sunil Fernando",
     role: "DRIVER",
     depotCode: "Peliyagoda",
+    staffId: "DRV-0207",
+    pin: "1357",
     blurb: "Drives the run, records every stop, works offline.",
   },
   {
@@ -57,12 +73,16 @@ export const SEED_USERS: SeedUser[] = [
     name: "Fathima Rizvi",
     role: "STORE_MANAGER",
     outletId: STORE_ANCHOR_OUTLET,
+    staffId: "STR-0074",
+    pin: "9024",
     blurb: "Orders for OUT074, and needs to know when to staff the counter.",
   },
   {
     email: "asha@waypoint.lk",
     name: "Asha Wijesinghe",
     role: "ADMIN",
+    staffId: "ADM-0001",
+    pin: "7531",
     blurb: "Keeps the accounts, outlets and vehicles; sees every depot.",
   },
 ];
@@ -71,6 +91,7 @@ export async function seedUsers(prisma: PrismaClient): Promise<number> {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
   for (const u of SEED_USERS) {
+    const pinHash = await bcrypt.hash(u.pin, 10);
     await prisma.user.upsert({
       where: { email: u.email },
       update: {
@@ -79,6 +100,8 @@ export async function seedUsers(prisma: PrismaClient): Promise<number> {
         depotCode: u.depotCode ?? null,
         outletId: u.outletId ?? null,
         passwordHash,
+        staffId: u.staffId,
+        pinHash,
       },
       create: {
         email: u.email,
@@ -87,6 +110,8 @@ export async function seedUsers(prisma: PrismaClient): Promise<number> {
         depotCode: u.depotCode ?? null,
         outletId: u.outletId ?? null,
         passwordHash,
+        staffId: u.staffId,
+        pinHash,
       },
     });
   }
@@ -102,4 +127,6 @@ export function printAccounts(): void {
       `         ${u.email.padEnd(width)}  ${DEMO_PASSWORD.padEnd(10)}  ${u.role}`,
     );
   }
+  console.log("[seed] Or by Waypoint staff ID and PIN (what the sign-in screens ask for):");
+  for (const u of SEED_USERS) console.log(`         ${u.staffId.padEnd(10)}  PIN ${u.pin}  ${u.role}`);
 }

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { Brand, DockType, ParkingConstraint, Prisma, Role, VehicleTemp, VehicleType } from "@prisma/client";
 import { DISTRICT_POSITIONS, syntheticOutletPosition } from "@katapatha/core/domain/geography";
 import { prisma } from "../lib/db.js";
+import { normalizeStaffId } from "../lib/auth.js";
 import { recordDecision } from "../lib/audit.js";
 import { addDays, parseIsoDate } from "../services/forecast.js";
 import {
@@ -74,7 +75,7 @@ const ERRORS = { 401: ERROR_RESPONSE, 403: ERROR_RESPONSE, 404: ERROR_RESPONSE, 
 const USER = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "email", "name", "role", "depotCode", "outletId", "active", "createdAt", "lastSignInAt"],
+  required: ["id", "email", "name", "role", "depotCode", "outletId", "staffId", "active", "createdAt", "lastSignInAt"],
   properties: {
     id: { type: "string" },
     email: { type: "string" },
@@ -82,6 +83,7 @@ const USER = {
     role: ROLE,
     depotCode: nullable({ type: "string" }),
     outletId: nullable({ type: "string" }),
+    staffId: nullable({ type: "string" }),
     active: { type: "boolean" },
     createdAt: { type: "string", format: "date-time" },
     lastSignInAt: nullable({ type: "string", format: "date-time" }),
@@ -90,6 +92,8 @@ const USER = {
 
 const NAME = { type: "string", minLength: 2, maxLength: 120 } as const;
 const PASSWORD = { type: "string", minLength: 8, maxLength: 200 } as const;
+const STAFF_ID = { type: "string", minLength: 2, maxLength: 32 } as const;
+const PIN = { type: "string", pattern: "^[0-9]{4,8}$" } as const;
 
 const CREATE_USER = {
   type: "object",
@@ -100,6 +104,8 @@ const CREATE_USER = {
     name: NAME,
     role: ROLE,
     password: PASSWORD,
+    staffId: STAFF_ID,
+    pin: PIN,
     depotCode: nullable({ type: "string", minLength: 1 }),
     outletId: nullable({ type: "string", minLength: 1 }),
   },
@@ -113,6 +119,8 @@ const UPDATE_USER = {
     name: NAME,
     role: ROLE,
     password: PASSWORD,
+    staffId: STAFF_ID,
+    pin: PIN,
     depotCode: nullable({ type: "string", minLength: 1 }),
     outletId: nullable({ type: "string", minLength: 1 }),
     active: { type: "boolean" },
@@ -214,7 +222,16 @@ const idParams = (name: string) => ({
   properties: { [name]: { type: "string", minLength: 1, maxLength: 64 } },
 });
 
-type CreateUser = { email: string; name: string; role: Role; password: string; depotCode?: string | null; outletId?: string | null };
+type CreateUser = {
+  email: string;
+  name: string;
+  role: Role;
+  password: string;
+  staffId?: string;
+  pin?: string;
+  depotCode?: string | null;
+  outletId?: string | null;
+};
 type UpdateUser = Partial<Omit<CreateUser, "email">> & { active?: boolean };
 type OutletEditable = {
   displayName?: string | null;
@@ -451,9 +468,16 @@ export default async function (fastify: FastifyInstance) {
     const problem = await scopeProblem(scope.depotCode, scope.outletId);
     if (problem) return invalid(reply, problem);
 
+    // The staff ID and PIN the web sign-in asks for come as a pair: a PIN with
+    // nobody to enter it for, or an ID that cannot be signed in with, is a mistake.
+    if ((body.staffId === undefined) !== (body.pin === undefined)) return invalid(reply, "Give the staff ID and the PIN together, or neither.");
+    const staffId = body.staffId === undefined ? null : normalizeStaffId(body.staffId);
+
     const taken = () => conflict(reply, "EMAIL_TAKEN", `${email} already has an account.`);
-    // A disabled account still holds its email: its history is that person's.
+    const staffTaken = () => conflict(reply, "STAFF_ID_TAKEN", `Staff ID ${staffId} already belongs to someone.`);
+    // A disabled account still holds its email and staff ID: its history is that person's.
     if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) return taken();
+    if (staffId && (await prisma.user.findUnique({ where: { staffId }, select: { id: true } }))) return staffTaken();
 
     let created;
     try {
@@ -463,11 +487,13 @@ export default async function (fastify: FastifyInstance) {
           name,
           role: body.role,
           passwordHash: await bcrypt.hash(body.password, BCRYPT_COST),
+          staffId,
+          pinHash: body.pin === undefined ? null : await bcrypt.hash(body.pin, BCRYPT_COST),
           ...scope,
         },
       });
     } catch (error) {
-      if (isUniqueViolation(error)) return taken();
+      if (isUniqueViolation(error)) return staffId && !(await prisma.user.findUnique({ where: { email }, select: { id: true } })) ? staffTaken() : taken();
       throw error;
     }
 
@@ -508,6 +534,18 @@ export default async function (fastify: FastifyInstance) {
       const problem = await scopeProblem(scope.depotCode, scope.outletId);
       if (problem) return invalid(reply, problem);
 
+      // An account that has no staff ID yet needs the PIN given with it.
+      const staffId = body.staffId === undefined ? undefined : normalizeStaffId(body.staffId);
+      if (staffId !== undefined && body.pin === undefined && !existing.pinHash) {
+        return invalid(reply, "Give a PIN with the staff ID: the account has none yet.");
+      }
+      if (staffId !== undefined && staffId !== existing.staffId && (await prisma.user.findUnique({ where: { staffId }, select: { id: true } }))) {
+        return conflict(reply, "STAFF_ID_TAKEN", `Staff ID ${staffId} already belongs to someone.`);
+      }
+      if (body.pin !== undefined && staffId === undefined && !existing.staffId) {
+        return invalid(reply, "Give a staff ID with the PIN: the account has none yet.");
+      }
+
       const data: Prisma.UserUncheckedUpdateInput = { role, depotCode: scope.depotCode, outletId: scope.outletId };
       const fields: Record<string, unknown> = { role, depotCode: scope.depotCode, outletId: scope.outletId };
       if (body.name !== undefined) {
@@ -515,6 +553,10 @@ export default async function (fastify: FastifyInstance) {
         if (name.length < 2) return invalid(reply, "A name needs at least two characters.");
         data.name = name;
         fields.name = name;
+      }
+      if (staffId !== undefined) {
+        data.staffId = staffId;
+        fields.staffId = staffId;
       }
       if (body.active !== undefined) {
         data.active = body.active;
@@ -525,16 +567,18 @@ export default async function (fastify: FastifyInstance) {
 
       const changed = changedKeys(userSnapshot(existing), fields);
       const resetPassword = body.password !== undefined;
-      if (changed.length === 0 && !resetPassword) {
+      const resetPin = body.pin !== undefined;
+      if (changed.length === 0 && !resetPassword && !resetPin) {
         const seen = await lastSignIns([existing.id]);
         return toAdminUser(existing, seen.get(existing.id) ?? null);
       }
       if (resetPassword) data.passwordHash = await bcrypt.hash(body.password!, BCRYPT_COST);
+      if (resetPin) data.pinHash = await bcrypt.hash(body.pin!, BCRYPT_COST);
 
       const updated = await prisma.user.update({ where: { id: userId }, data });
       // A new password, a disabled account or a new role ends every session:
       // nobody should carry on under a binding the admin just changed.
-      if (resetPassword || body.active === false || changed.some((k) => k === "role" || k === "depotCode" || k === "outletId")) {
+      if (resetPassword || resetPin || body.active === false || changed.some((k) => k === "role" || k === "depotCode" || k === "outletId")) {
         await prisma.session.deleteMany({ where: { userId } });
       }
 
@@ -545,8 +589,8 @@ export default async function (fastify: FastifyInstance) {
         action: body.active === false ? "user.disable" : body.active === true && !existing.active ? "user.enable" : "user.update",
         entityType: "User",
         entityId: updated.id,
-        // That the password changed is recorded; what it is, never.
-        note: resetPassword ? "Password reset by an admin." : undefined,
+        // That a password or PIN changed is recorded; what it is, never.
+        note: [resetPassword ? "Password reset by an admin." : null, resetPin ? "PIN reset by an admin." : null].filter(Boolean).join(" ") || undefined,
         before: Object.fromEntries(changed.map((k) => [k, before[k]])) as Prisma.InputJsonValue,
         after: Object.fromEntries(changed.map((k) => [k, after[k]])) as Prisma.InputJsonValue,
       });

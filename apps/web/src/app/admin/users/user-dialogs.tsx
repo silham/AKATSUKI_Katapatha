@@ -20,6 +20,8 @@ function valuesOf(user: AdminUser | null): UserFormValues {
     name: user.name,
     role: user.role,
     password: "",
+    staffId: user.staffId ?? "",
+    pin: "",
     depotCode: user.depotCode ?? "",
     outletId: user.outletId ?? "",
   };
@@ -141,6 +143,40 @@ export function UserDialog({
               An admin is not tied to a depot or outlet: they manage all of Waypoint.
             </p>
           ) : null}
+
+          <Field
+            label="Staff ID"
+            htmlFor={id("staffId")}
+            error={errors.staffId}
+            hint="The number on their badge. The sign-in screens ask for it with a PIN."
+          >
+            <input
+              {...aria("staffId", true)}
+              value={values.staffId}
+              onChange={(event) => setValues((current) => ({ ...current, staffId: event.target.value.toUpperCase().replace(/\s/g, "") }))}
+              maxLength={32}
+              autoComplete="off"
+              spellCheck={false}
+              className={`${INPUT} ${border("staffId")} font-mono uppercase`}
+            />
+          </Field>
+          <Field
+            label={editing ? "New PIN (optional)" : "PIN"}
+            htmlFor={id("pin")}
+            error={errors.pin}
+            hint={editing ? "Leave empty to keep the current PIN. Setting one signs them out everywhere." : "4 to 8 digits. Give it to them in person."}
+          >
+            <input
+              {...aria("pin", true)}
+              type="password"
+              inputMode="numeric"
+              value={values.pin}
+              onChange={set("pin")}
+              maxLength={8}
+              autoComplete="new-password"
+              className={`${INPUT} ${border("pin")} tabular`}
+            />
+          </Field>
 
           <Field
             label={editing ? "New password (optional)" : "Password"}

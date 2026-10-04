@@ -18,6 +18,7 @@ export function toAdminUser(user: User, lastSignInAt: Date | null) {
     role: user.role,
     depotCode: user.depotCode,
     outletId: user.outletId,
+    staffId: user.staffId,
     active: user.active,
     createdAt: user.createdAt.toISOString(),
     lastSignInAt: lastSignInAt ? lastSignInAt.toISOString() : null,
@@ -25,13 +26,14 @@ export function toAdminUser(user: User, lastSignInAt: Date | null) {
 }
 
 /** What the decision log keeps of an account. Never the password hash. */
-export function userSnapshot(user: Pick<User, "email" | "name" | "role" | "depotCode" | "outletId" | "active">) {
+export function userSnapshot(user: Pick<User, "email" | "name" | "role" | "depotCode" | "outletId" | "staffId" | "active">) {
   return {
     email: user.email,
     name: user.name,
     role: user.role,
     depotCode: user.depotCode,
     outletId: user.outletId,
+    staffId: user.staffId,
     active: user.active,
   };
 }

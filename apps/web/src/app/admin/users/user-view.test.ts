@@ -8,6 +8,7 @@ const make = (id: string, o: Partial<AdminUser>): AdminUser => ({
   role: "DRIVER",
   depotCode: "Peliyagoda",
   outletId: null,
+  staffId: null,
   active: true,
   createdAt: "",
   lastSignInAt: null,

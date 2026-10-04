@@ -6,6 +6,8 @@ const valid: UserFormValues = {
   name: " Nimal Perera ",
   role: "DRIVER",
   password: "correct horse",
+  staffId: " drv-0310 ",
+  pin: "1357",
   depotCode: "Peliyagoda",
   outletId: "",
 };
@@ -14,7 +16,7 @@ describe("validateNewUser", () => {
   it("builds the request, lower-casing the email and trimming the name", () => {
     expect(validateNewUser(valid)).toEqual({
       ok: true,
-      data: { email: "nimal@waypoint.lk", name: "Nimal Perera", role: "DRIVER", password: "correct horse", depotCode: "Peliyagoda", outletId: null },
+      data: { email: "nimal@waypoint.lk", name: "Nimal Perera", role: "DRIVER", password: "correct horse", staffId: "DRV-0310", pin: "1357", depotCode: "Peliyagoda", outletId: null },
     });
   });
 
@@ -29,7 +31,7 @@ describe("validateNewUser", () => {
     const result = validateNewUser(EMPTY_USER_FORM);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(Object.keys(result.errors).sort()).toEqual(["depotCode", "email", "name", "password"]);
+    expect(Object.keys(result.errors).sort()).toEqual(["depotCode", "email", "name", "password", "pin", "staffId"]);
   });
 
   it("needs a depot for depot roles and an outlet for a store manager", () => {
@@ -85,5 +87,29 @@ describe("helpers", () => {
 
   it("normalises an email the way sign-in looks it up", () => {
     expect(normaliseEmail("  A@B.LK ")).toBe("a@b.lk");
+  });
+});
+
+describe("staff ID and PIN", () => {
+  it("are both required when adding, because the sign-in screens ask for them", () => {
+    expect(validateNewUser({ ...valid, staffId: "" }).ok).toBe(false);
+    expect(validateNewUser({ ...valid, pin: "" }).ok).toBe(false);
+  });
+
+  it("upper-cases the staff ID and takes only 4 to 8 digits as a PIN", () => {
+    const result = validateNewUser({ ...valid, staffId: "drv-0310" });
+    expect(result.ok && result.data.staffId).toBe("DRV-0310");
+    for (const pin of ["123", "123456789", "12a4", "12 34"]) expect(validateNewUser({ ...valid, pin }).ok).toBe(false);
+    expect(validateNewUser({ ...valid, pin: "12345678" }).ok).toBe(true);
+  });
+
+  it("leave the current ones alone on an edit when empty, and send only what was given", () => {
+    const none = validateUserEdit({ ...valid, staffId: "", pin: "" });
+    expect(none.ok && "staffId" in none.data).toBe(false);
+    expect(none.ok && "pin" in none.data).toBe(false);
+    const pinOnly = validateUserEdit({ ...valid, staffId: "", pin: "2468" });
+    expect(pinOnly.ok && pinOnly.data.pin).toBe("2468");
+    expect(pinOnly.ok && "staffId" in pinOnly.data).toBe(false);
+    expect(validateUserEdit({ ...valid, pin: "24" }).ok).toBe(false);
   });
 });

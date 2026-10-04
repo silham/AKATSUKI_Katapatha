@@ -23,6 +23,7 @@ import {
   getSessionByToken,
   requireRoleOf,
   verifyCredentials,
+  verifyStaffPin,
   type SessionUser,
 } from "../lib/auth.js";
 import { historyFor, recordDecision } from "../lib/audit.js";
@@ -101,6 +102,16 @@ describe("BE1 authentication, authorization and audit libraries", () => {
 
     prismaMock.user.findUnique.mockResolvedValue({ ...user, passwordHash, active: false });
     await expect(verifyCredentials("nimal@waypoint.lk", "waypoint")).resolves.toBeNull();
+  });
+
+  it("refuses a disabled account's correct PIN", async () => {
+    const bcrypt = (await import("bcryptjs")).default;
+    const pinHash = await bcrypt.hash("2580", 4);
+    prismaMock.user.findUnique.mockResolvedValue({ ...user, staffId: "DSP-0101", pinHash, active: true });
+    await expect(verifyStaffPin("dsp-0101", "2580")).resolves.toMatchObject({ id: user.id });
+
+    prismaMock.user.findUnique.mockResolvedValue({ ...user, staffId: "DSP-0101", pinHash, active: false });
+    await expect(verifyStaffPin("dsp-0101", "2580")).resolves.toBeNull();
   });
 
   it("rejects a dispatcher vehicle outside the caller's depot", async () => {

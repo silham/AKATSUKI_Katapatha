@@ -51,6 +51,8 @@ function userRow(over: Record<string, unknown> = {}) {
     depotCode: "Kandy",
     outletId: null,
     defaultVehicleId: null,
+    staffId: null,
+    pinHash: null,
     active: true,
     createdAt: new Date("2026-10-04T03:00:00.000Z"),
     ...over,
@@ -169,6 +171,58 @@ describe("admin routes", () => {
       expect(audit).toMatchObject({ action: "user.create", entityType: "User", actorRole: "ADMIN" });
       expect(JSON.stringify(audit)).not.toContain("drive1234");
       expect(JSON.stringify(audit)).not.toContain("passwordHash");
+    });
+
+    it("takes a staff ID and PIN as a pair, upper-cases the ID and stores only a hash of the PIN", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.user.create).mockImplementation((async ({ data }: { data: Record<string, unknown> }) => userRow(data)) as never);
+      const base = { email: "kamal@waypoint.lk", name: "Kamal Jayasuriya", role: "DRIVER", password: "drive1234", depotCode: "Kandy" };
+
+      expect((await create({ ...base, staffId: "drv-0310" })).json().error.message).toMatch(/together/);
+      expect((await create({ ...base, pin: "1234" })).statusCode).toBe(422);
+      expect((await create({ ...base, staffId: "drv-0310", pin: "12" })).json().error.code).toBe("REQUEST_DOES_NOT_MATCH_CONTRACT");
+      expect(prisma.user.create).not.toHaveBeenCalled();
+
+      const ok = await create({ ...base, staffId: "drv-0310", pin: "1234" });
+      expect(ok.statusCode).toBe(201);
+      const data = vi.mocked(prisma.user.create).mock.calls[0]![0].data as Record<string, unknown>;
+      expect(data.staffId).toBe("DRV-0310");
+      expect(data.pinHash).not.toBe("1234");
+      expect(String(data.pinHash)).toMatch(/^\$2/);
+      expect(ok.json()).not.toHaveProperty("pinHash");
+      expect(JSON.stringify(vi.mocked(prisma.auditEvent.create).mock.calls[0]![0].data)).not.toContain("1234");
+    });
+
+    it("refuses a staff ID that already belongs to someone", async () => {
+      vi.mocked(prisma.user.findUnique).mockImplementation((async ({ where }: { where: Record<string, string> }) =>
+        where.staffId ? { id: "USR1" } : null) as never);
+      const response = await create({ email: "kamal@waypoint.lk", name: "Kamal J", role: "DRIVER", password: "drive1234", depotCode: "Kandy", staffId: "DSP-0101", pin: "1234" });
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe("STAFF_ID_TAKEN");
+    });
+
+    it("a PIN reset signs the account out and records only that it happened", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(userRow({ staffId: "DRV-0310", pinHash: "$2b$10$old" }) as never);
+      vi.mocked(prisma.user.update).mockResolvedValue(userRow({ staffId: "DRV-0310" }) as never);
+      const server = await serverFor(admin);
+
+      await server.inject({ method: "PATCH", url: "/v1/admin/users/USR9", payload: { pin: "9876" } });
+
+      expect(prisma.session.deleteMany).toHaveBeenCalled();
+      const data = vi.mocked(prisma.user.update).mock.calls[0]![0].data as Record<string, unknown>;
+      expect(String(data.pinHash)).toMatch(/^\$2/);
+      const audit = vi.mocked(prisma.auditEvent.create).mock.calls[0]![0].data;
+      expect(audit.note).toBe("PIN reset by an admin.");
+      expect(JSON.stringify(audit)).not.toContain("9876");
+    });
+
+    it("will not give an account a staff ID without a PIN, or a PIN without a staff ID", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(userRow() as never);
+      const server = await serverFor(admin);
+
+      expect((await server.inject({ method: "PATCH", url: "/v1/admin/users/USR9", payload: { staffId: "DRV-0310" } })).statusCode).toBe(422);
+      expect((await server.inject({ method: "PATCH", url: "/v1/admin/users/USR9", payload: { pin: "9876" } })).statusCode).toBe(422);
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
     it("binds each role to exactly the scope it works in", async () => {

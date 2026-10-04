@@ -20,9 +20,9 @@ export type SaveUserState = {
 
 export type ActiveState = { failure?: Failure };
 
-/** A refused form comes back without the password: it should not travel back to the browser. */
+/** A refused form comes back without the password or PIN: they should not travel back to the browser. */
 function keep(values: UserFormValues): UserFormValues {
-  return { ...values, password: "" };
+  return { ...values, password: "", pin: "" };
 }
 
 /**

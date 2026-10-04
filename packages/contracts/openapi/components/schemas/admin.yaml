@@ -12,7 +12,7 @@ AdminUser:
     An account as the admin manages it. No password or hash is ever returned.
     `depotCode` is set for dispatchers, loaders and drivers; `outletId` for
     store managers; neither for an admin.
-  required: [id, email, name, role, depotCode, outletId, active, createdAt, lastSignInAt]
+  required: [id, email, name, role, depotCode, outletId, staffId, active, createdAt, lastSignInAt]
   properties:
     id: { type: string, examples: ["clx0usr1a2b3c4d5e6f7g8h9"] }
     email: { type: string, format: email, examples: ["nimal@waypoint.lk"] }
@@ -20,6 +20,13 @@ AdminUser:
     role: { $ref: "./common.yaml#/Role" }
     depotCode: { type: [string, "null"], examples: ["Peliyagoda"] }
     outletId: { type: [string, "null"], examples: [null] }
+    staffId:
+      type: [string, "null"]
+      description: >
+        The Waypoint staff ID printed on the person's badge. The web sign-in
+        pages ask for it with a PIN, so an account without one can only sign in
+        by email and password through the API. The PIN is never returned.
+      examples: ["DSP-0101"]
     active: { type: boolean, examples: [true] }
     createdAt: { type: string, format: date-time }
     lastSignInAt:
@@ -38,6 +45,8 @@ CreateUserRequest:
     password: { type: string, minLength: 8, maxLength: 200 }
     depotCode: { type: [string, "null"], description: "Required for DISPATCHER, LOADER and DRIVER." }
     outletId: { type: [string, "null"], description: "Required for STORE_MANAGER." }
+    staffId: { type: string, minLength: 2, maxLength: 32, description: "Upper-cased on save. Give it with `pin`, or neither." }
+    pin: { type: string, pattern: '^[0-9]{4,8}$', description: "4 to 8 digits. Stored as a hash." }
 
 UpdateUserRequest:
   type: object
@@ -53,6 +62,8 @@ UpdateUserRequest:
     password: { type: string, minLength: 8, maxLength: 200 }
     depotCode: { type: [string, "null"] }
     outletId: { type: [string, "null"] }
+    staffId: { type: string, minLength: 2, maxLength: 32, description: "An account with no staff ID needs `pin` with it." }
+    pin: { type: string, pattern: '^[0-9]{4,8}$', description: "Setting one signs the account out everywhere." }
     active: { type: boolean }
 
 AdminOutlet:

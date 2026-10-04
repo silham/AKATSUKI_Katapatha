@@ -227,7 +227,10 @@ function NameCell({ user, filters, self }: { user: AdminUser; filters: UserFilte
         {user.name}
       </Link>
       {self ? <span className="ml-2 text-xs font-semibold text-muted">(you)</span> : null}
-      <p className="truncate text-xs text-muted">{user.email}</p>
+      <p className="truncate text-xs text-muted">
+        {user.email}
+        {user.staffId ? <span className="font-mono"> · {user.staffId}</span> : <span> · no staff ID</span>}
+      </p>
     </div>
   );
 }

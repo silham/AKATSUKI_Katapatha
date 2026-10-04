@@ -25,6 +25,7 @@ const ACCOUNTS = [
   {
     role: "Store manager",
     email: "fathima@waypoint.lk",
+    staff: { id: "STR-0074", pin: "9024" },
     scope: "Outlet OUT074 · Fresh Nugegoda",
     device: "Phone or counter PC",
     does: "Place an order, follow the delivery, confirm receipt.",
@@ -34,6 +35,7 @@ const ACCOUNTS = [
   {
     role: "Dispatcher",
     email: "nimal@waypoint.lk",
+    staff: { id: "DSP-0101", pin: "2580" },
     scope: "Peliyagoda depot",
     device: "Dense desktop",
     does: "Close the queue, run the allocator, confirm deferrals, publish.",
@@ -48,10 +50,12 @@ const ACCOUNTS = [
     does: "Check each line onto the vehicle, raise shortfalls, mark ready.",
     home: "/loader",
     accent: "border-blue-200",
+    staff: { id: "LDR-0142", pin: "4826" },
   },
   {
     role: "Driver",
     email: "sunil@waypoint.lk",
+    staff: { id: "DRV-0207", pin: "1357" },
     scope: "Claims a vehicle at the dock",
     device: "Phone, patchy signal",
     does: "Arrive, unload, complete with POD, report problems.",
@@ -61,6 +65,7 @@ const ACCOUNTS = [
   {
     role: "Admin",
     email: "asha@waypoint.lk",
+    staff: { id: "ADM-0001", pin: "7531" },
     scope: "Every depot",
     device: "Desktop",
     does: "Add people, outlets and vehicles; compare depots; read the decision log.",
@@ -112,8 +117,8 @@ export default function AccessPage() {
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-muted">
             Four seeded demo accounts, one per role. Tap a card to sign in and land on that
-            role&apos;s workspace. The password is the same for all four and shown on each card
-            so a reviewer can see what the real sign-in page would see. This route is removed
+            role&apos;s workspace. Each card shows the staff ID and PIN the real sign-in page asks
+            for, so a reviewer can type them there too. This route is removed
             in production builds — the only time it exists is on a seeded local database.
           </p>
         </header>
@@ -135,10 +140,10 @@ export default function AccessPage() {
                 <p className="mt-1 text-sm text-muted">{account.does}</p>
               </div>
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md border border-line bg-raised p-3 text-sm">
-                <dt className="font-semibold text-muted">Email</dt>
-                <dd className="tabular text-ink">{account.email}</dd>
-                <dt className="font-semibold text-muted">Password</dt>
-                <dd className="tabular text-ink">waypoint</dd>
+                <dt className="font-semibold text-muted">Staff ID</dt>
+                <dd className="tabular text-ink">{account.staff.id}</dd>
+                <dt className="font-semibold text-muted">PIN</dt>
+                <dd className="tabular text-ink">{account.staff.pin}</dd>
                 <dt className="font-semibold text-muted">Lands on</dt>
                 <dd className="text-ink">{account.home}</dd>
               </dl>
