@@ -26,7 +26,10 @@ FROM deps AS build
 COPY packages/ packages/
 COPY apps/api/ apps/api/
 WORKDIR /repo/apps/api
-RUN pnpm exec prisma generate && pnpm run build
+# No bundle step: routes and plugins are loaded from the filesystem by
+# @fastify/autoload, and the workspace packages export TypeScript source, so
+# the API runs under tsx (as in development) rather than from an esbuild bundle.
+RUN pnpm exec prisma generate
 
 FROM base AS runtime
 ENV NODE_ENV=production
@@ -39,4 +42,4 @@ EXPOSE 3001
 # The binaries are called directly, not through pnpm: pnpm checks the workspace's
 # dependencies before every run and would reinstall from the registry at boot.
 ENV PATH=/repo/apps/api/node_modules/.bin:$PATH
-CMD ["sh", "-c", "prisma migrate deploy && tsx prisma/seed/index.ts && tsx prisma/seed/productsOnly.ts && tsx prisma/seed/districtsOnly.ts && node dist/main.js"]
+CMD ["sh", "-c", "prisma migrate deploy && tsx prisma/seed/index.ts && tsx prisma/seed/productsOnly.ts && tsx prisma/seed/districtsOnly.ts && tsx src/main.ts"]
