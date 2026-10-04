@@ -149,33 +149,16 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="relative hidden lg:block">
-            <figure className="rounded-card border border-white/10 bg-white/5 p-6 backdrop-blur">
-              <figcaption className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                Illustration · a vehicle after a signal gap
-              </figcaption>
-              <div className="mt-4 rounded-control bg-white/10 p-4">
-                <p className="text-sm font-semibold">Vehicle on its second trip</p>
-                <p className="tabular mt-2 text-2xl font-semibold">Last reported 06:41</p>
-                <p className="tabular text-sm text-white/70">22 min ago</p>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-control bg-white/10 p-3">
-                  <p className="text-xs text-white/60">Arrival at the store</p>
-                  <p className="tabular mt-1 text-lg font-semibold">07:10 to 07:40</p>
-                  <p className="mt-1 text-xs text-white/60">A range, because the last report is old</p>
-                </div>
-                <div className="rounded-control bg-white/10 p-3">
-                  <p className="text-xs text-white/60">Stops before the store</p>
-                  <p className="tabular mt-1 text-lg font-semibold">2</p>
-                  <p className="mt-1 text-xs text-white/60">Always known from the plan</p>
-                </div>
-              </div>
-              <p className="mt-4 rounded-control bg-navy p-3 text-xs text-white/70">
-                <span className="font-semibold text-action">Work continues through a signal gap. </span>
-                Every figure here carries its age or says it is an estimate.
-              </p>
-            </figure>
+          <div className="relative hidden items-center lg:flex">
+            <Image
+              src="/Group%201.png"
+              alt="Katapatha planning workspace with route map, beside the driver app showing today's stops"
+              width={827}
+              height={682}
+              priority
+              sizes="(min-width: 1024px) 560px, 0px"
+              className="h-auto w-full drop-shadow-2xl"
+            />
           </div>
         </div>
         </div>
