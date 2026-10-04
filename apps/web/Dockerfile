@@ -9,7 +9,7 @@ RUN corepack enable && corepack prepare pnpm@12.3.4 --activate
 WORKDIR /repo
 
 FROM base AS deps
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc tsconfig.base.json ./
 COPY packages/core/package.json       packages/core/
 COPY packages/contracts/package.json  packages/contracts/
 COPY packages/api-client/package.json packages/api-client/
