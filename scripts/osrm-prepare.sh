@@ -35,4 +35,4 @@ run osrm-partition /data/sri-lanka-latest.osrm
 echo "[osrm] Customizing..."
 run osrm-customize /data/sri-lanka-latest.osrm
 
-echo "[osrm] Done. Start it with: pnpm osrm:up   (then set OSRM_URL=http://localhost:5000 for the API)"
+echo "[osrm] Done. Start it with: pnpm osrm:up   (then set OSRM_URL=http://127.0.0.1:5000 for the API)"

@@ -43,11 +43,11 @@ export function DateRangeControl({
       )}
       <label className="flex items-center gap-1 pl-1 text-sm text-muted">
         <span>From</span>
-        <input type="date" name="from" defaultValue={from} required className="h-9 rounded-control bg-transparent px-1 text-sm font-semibold text-ink" />
+        <input key={`from-${from}`} type="date" name="from" defaultValue={from} required className="h-9 rounded-control bg-transparent px-1 text-sm font-semibold text-ink" />
       </label>
       <label className="flex items-center gap-1 text-sm text-muted">
         <span>to</span>
-        <input type="date" name="to" defaultValue={to} required className="h-9 rounded-control bg-transparent px-1 text-sm font-semibold text-ink" />
+        <input key={`to-${to}`} type="date" name="to" defaultValue={to} required className="h-9 rounded-control bg-transparent px-1 text-sm font-semibold text-ink" />
       </label>
       <button type="submit" className="h-9 rounded-control px-3 text-sm font-semibold text-link hover:bg-canvas">
         Apply

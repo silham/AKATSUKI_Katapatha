@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DEPOT_POSITIONS } from "@katapatha/core/domain/geography";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { DateControl } from "@/components/ui/date-control";
 import { PageBody, PageHeader } from "@/components/ui/page-header";
@@ -10,7 +9,8 @@ import { requireRole } from "@/lib/auth";
 import { dateParam } from "@/lib/dates";
 import { readFailure } from "@/lib/failures";
 import { ageLabel, clockTime, plural } from "@/lib/format";
-import { FleetMap } from "./fleet-map";
+import { anyStraightRoutes, toLayers } from "./map-layers";
+import { RoadMap } from "./road-map";
 import {
   etaLabel,
   filterCounts,
@@ -72,13 +72,17 @@ export default async function MapPage({ searchParams }: { searchParams: Promise<
     );
   }
 
-  const { vehicles, summary, updatedAt } = result.data;
+  const { vehicles, summary, updatedAt, depot } = result.data;
   const depotName = user.depotCode ?? result.data.depotCode;
   const rows = filterMapVehicles(vehicles, filter, q);
   const counts = filterCounts(summary);
   const selected = selectedId ? vehicles.find((v) => v.vehicleId === selectedId) : undefined;
-  const unplaced = vehicles.filter((v) => v.position === null);
   const linkFor = (vehicleId: string) => href({ date, filter, q, vehicle: vehicleId });
+  // The map draws what the list shows, so a filter or search narrows both.
+  const layers = toLayers(rows, selectedId, linkFor);
+  const unplaced = rows.filter((v) => v.position === null);
+  const idleUnplaced = unplaced.filter((v) => v.state === "IDLE");
+  const outUnplaced = unplaced.filter((v) => v.state !== "IDLE");
 
   return (
     <PageBody>
@@ -98,8 +102,8 @@ export default async function MapPage({ searchParams }: { searchParams: Promise<
 
       {vehicles.length === 0 ? (
         <EmptyState
-          title="No vehicles are out or loading on this day"
-          detail="A vehicle appears here once its trip is being loaded or has departed on the published plan."
+          title="No vehicles can run on this day"
+          detail={`Every vehicle at ${depotName} is in the workshop, or the depot has none.`}
         />
       ) : (
         <div className="grid items-start gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
@@ -170,34 +174,37 @@ export default async function MapPage({ searchParams }: { searchParams: Promise<
           <section aria-label="Map" id="map-region" className="min-w-0 xl:sticky xl:top-4">
             <div className="relative overflow-hidden rounded-card border border-line bg-surface">
               <p className="border-b border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink">
-                Schematic — positions as last reported by each driver&apos;s phone
+                Routes along the roads · vehicles where each driver&apos;s phone last reported
               </p>
-              <div role="region" aria-label="Schematic map, scrolls sideways on narrow screens" tabIndex={0} className="overflow-x-auto">
-                <FleetMap
-                  depotName={depotName}
-                  depot={DEPOT_POSITIONS[depotName] ?? null}
-                  vehicles={vehicles}
-                  selectedId={selectedId}
-                  hrefFor={linkFor}
-                  insetRight={selected ? 470 : 0}
-                />
-              </div>
+              <RoadMap
+                depot={depot ? { name: `${depot.code} DC`, at: [depot.lat, depot.lng] } : null}
+                vehicles={layers}
+                fitKey={`${date}|${selectedId ?? ""}|${filter}|${q}`}
+              />
               <Legend />
               {selected ? <Callout vehicle={selected} closeHref={href({ date, filter, q })} /> : null}
             </div>
             <p className="mt-2 text-xs text-muted">
-              Depots and districts are drawn at their centres and legs are straight lines, not roads. A marker is where the
-              phone last reported, so it need not sit on its line.
+              A route runs from the depot through the trip&apos;s stops and back, along OpenStreetMap roads.
+              {anyStraightRoutes(layers)
+                ? " A dashed route is a straight line: the road network could not be reached for it."
+                : null}{" "}
+              A marker is a reported position, not a live one, so it need not sit on its route.
             </p>
-            {unplaced.length > 0 ? (
+            {outUnplaced.length > 0 ? (
               <div className="mt-3">
                 <Advisory>
-                  {plural(unplaced.length, "vehicle")} not shown on the map: {unplaced.map((v) => v.vehicleId).join(", ")}.{" "}
-                  {unplaced.some((v) => v.state !== "NOT_STARTED")
+                  {plural(outUnplaced.length, "vehicle")} not shown on the map: {outUnplaced.map((v) => v.vehicleId).join(", ")}.{" "}
+                  {outUnplaced.some((v) => v.state !== "NOT_STARTED")
                     ? "No position has been reported yet."
                     : "They are at the dock and have not reported a position."}
                 </Advisory>
               </div>
+            ) : null}
+            {idleUnplaced.length > 0 ? (
+              <p className="mt-3 text-sm text-muted">
+                At the depot with no trip, and no position reported: {idleUnplaced.map((v) => v.vehicleId).join(", ")}.
+              </p>
             ) : null}
           </section>
         </div>
@@ -225,7 +232,7 @@ function VehicleRow({ vehicle: v, selected, href }: { vehicle: MapVehicle; selec
       </span>
       <span className="min-w-0 flex-1">
         <span className="block font-bold text-ink">
-          {v.vehicleId} <span className="font-normal text-muted">· {v.trip.districtName}</span>
+          {v.vehicleId} <span className="font-normal text-muted">· {v.trip ? v.trip.districtName : "No trip"}</span>
         </span>
         <span className="block text-sm text-muted">
           {v.nextStop ? `${progressLine(v)} · ETA ${eta}` : progressLine(v)}
@@ -244,7 +251,8 @@ function Legend() {
     { label: "On time", swatch: "bg-good" },
     { label: "Late", swatch: "bg-warn" },
     { label: "Returning", swatch: "bg-info" },
-    { label: "At the dock", swatch: "bg-muted" },
+    { label: "Loading", swatch: "bg-muted" },
+    { label: "At the depot", swatch: "border-2 border-muted bg-surface" },
   ];
   return (
     <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line px-4 py-3 text-sm text-ink">
@@ -261,6 +269,10 @@ function Legend() {
       <li className="flex items-center gap-2">
         <span aria-hidden className="size-3 rounded-sm bg-navy" />
         Depot
+      </li>
+      <li className="flex items-center gap-2">
+        <span aria-hidden className="size-3 rounded-full border-2 border-ink bg-action" />
+        Stop to deliver
       </li>
     </ul>
   );
@@ -287,13 +299,16 @@ function Callout({ vehicle: v, closeHref }: { vehicle: MapVehicle; closeHref: st
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-lg font-bold text-ink">{v.vehicleId}</h3>
-            <span className="rounded-control border border-line bg-raised px-2 py-0.5 text-xs font-semibold text-muted">
-              Trip {v.trip.tripNo}
-            </span>
+            {v.trip ? (
+              <span className="rounded-control border border-line bg-raised px-2 py-0.5 text-xs font-semibold text-muted">
+                Trip {v.trip.tripNo}
+              </span>
+            ) : null}
             <StatusPill label={stateLabel(v)} tone={state.tone} />
           </div>
           <p className="mt-1 text-sm text-muted">
-            {v.driverName ?? "No driver yet"} · {v.trip.districtName} run
+            {v.driverName ?? "No driver yet"} · {v.trip ? `${v.trip.districtName} run` : "no trip on this day"}
+            {v.route ? ` · ${v.route.km.toLocaleString("en-GB")} km round trip${v.route.live ? "" : " (straight line)"}` : ""}
           </p>
         </div>
         <Link

@@ -1,6 +1,8 @@
 import type { ChillerSource, Role, StopStatus, TripStatus, Vehicle } from "@prisma/client";
 import { isInRange } from "@katapatha/core/domain/chiller";
+import { DEPOT_POSITIONS, type LatLng } from "@katapatha/core/domain/geography";
 import { prisma } from "../lib/db";
+import { routeGeometry, type RouteLine } from "./routing";
 import {
   ageSecondsOf,
   estimatedArrival,
@@ -125,7 +127,11 @@ export function summariseFleet(vehicles: { temp: "reefer" | "ambient"; status: V
 /** Behind plan by this much or more is "late"; a few minutes' slip is normal at a dock. */
 export const LATE_AFTER_MINUTES = 5;
 
-export type MapState = "ON_TIME" | "LATE" | "RETURNING" | "LAMP" | "NOT_STARTED";
+/**
+ * IDLE is a vehicle that can run today (it is not in the workshop) but has no
+ * trip out, waiting or loading: it is at the depot, or back there.
+ */
+export type MapState = "ON_TIME" | "LATE" | "RETURNING" | "LAMP" | "NOT_STARTED" | "IDLE";
 
 /** A stop that no longer needs the driver: delivered, skipped, or failed. */
 export function isStopFinished(status: StopStatus): boolean {
@@ -381,39 +387,84 @@ export async function loadVehicleDetail(
   };
 }
 
-export async function loadFleetPositions(depotCode: string, date: Date, now: Date) {
-  const trips = await prisma.trip.findMany({
-    where: {
-      plan: PUBLISHED_FOR(date, depotCode),
-      status: { in: ["DEPARTED", "READY", "LOADING"] },
-    },
-    include: {
-      stops: {
-        orderBy: { seq: "asc" },
-        include: { outlet: { select: { id: true, displayName: true, windowOpen: true, windowClose: true } } },
-      },
-    },
-  });
+/** Draws a trip's road route; injectable so a test does not need the road network. */
+export type RouteFor = (waypoints: readonly LatLng[]) => Promise<RouteLine>;
 
+/**
+ * Every vehicle that can run on the day (not in the workshop), for the map.
+ *
+ * A vehicle with a trip out, sealed or loading is shown on that trip, with its
+ * stops and the road route depot → stops → depot. One with none is IDLE. A
+ * position is only ever what the driver's phone reported; an idle vehicle that
+ * has not reported is listed at the depot, never placed there as if it had.
+ *
+ * The route is OpenStreetMap road geometry from OSRM when it answers, and a
+ * straight line through the stops marked `live: false` when it does not.
+ */
+export async function loadFleetPositions(depotCode: string, date: Date, now: Date, routeFor: RouteFor = routeGeometry) {
+  const [depot, vehicles, workshop, trips] = await Promise.all([
+    prisma.depot.findUnique({ where: { code: depotCode }, select: { code: true, name: true, lat: true, lng: true } }),
+    prisma.vehicle.findMany({ where: { depotCode }, orderBy: { id: "asc" }, select: { id: true, type: true, temp: true } }),
+    prisma.vehicleDayStatus.findMany({
+      where: { date, status: "IN_WORKSHOP", vehicle: { depotCode } },
+      select: { vehicleId: true },
+    }),
+    prisma.trip.findMany({
+      where: {
+        plan: PUBLISHED_FOR(date, depotCode),
+        status: { in: ["DEPARTED", "READY", "LOADING"] },
+      },
+      include: {
+        stops: {
+          orderBy: { seq: "asc" },
+          include: {
+            outlet: { select: { id: true, displayName: true, windowOpen: true, windowClose: true, lat: true, lng: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const inWorkshop = new Set(workshop.map((w) => w.vehicleId));
   const byVehicle = new Map<string, typeof trips>();
   for (const trip of trips) byVehicle.set(trip.vehicleId, [...(byVehicle.get(trip.vehicleId) ?? []), trip]);
-  const vehicleIds = [...byVehicle.keys()].sort();
+  const kind = new Map(vehicles.map((v) => [v.id, { type: v.type, temp: v.temp }]));
+  // A vehicle out on a trip is on the map even if its fleet row is somehow missing.
+  const vehicleIds = [...new Set([...vehicles.map((v) => v.id).filter((id) => !inWorkshop.has(id)), ...byVehicle.keys()])].sort();
+
+  const depotAt: LatLng | null =
+    depot?.lat != null && depot.lng != null ? { lat: depot.lat, lng: depot.lng } : (DEPOT_POSITIONS[depotCode] ?? null);
 
   const [drivers, positions] = await Promise.all([driverNames(vehicleIds), latestPositions(vehicleIds, now)]);
 
-  const entries = vehicleIds.flatMap((vehicleId) => {
-    const trip = pickMapTrip(byVehicle.get(vehicleId) ?? []);
-    if (!trip) return [];
-    const position = positions.get(vehicleId) ?? null;
-    const next = nextStopOf(trip.stops);
-    // Lateness is the slip at the last stop the driver reached. Once nothing
-    // is left to serve it describes the past, so a vehicle on its way home is
-    // returning, not late.
-    const late = next ? lateMinutes(trip.stops) : 0;
-    return [
-      {
+  const entries = await Promise.all(
+    vehicleIds.map(async (vehicleId) => {
+      const trip = pickMapTrip(byVehicle.get(vehicleId) ?? []);
+      const position = positions.get(vehicleId) ?? null;
+      const base = {
         vehicleId,
+        vehicleType: kind.get(vehicleId)?.type ?? null,
+        vehicleTemp: kind.get(vehicleId)?.temp ?? null,
         driverName: drivers.get(vehicleId) ?? null,
+        position: position ? positionView(position) : null,
+      };
+      if (!trip) {
+        return { ...base, state: "IDLE" as MapState, lateMinutes: 0, trip: null, nextStop: null, stops: [], route: null };
+      }
+
+      const next = nextStopOf(trip.stops);
+      // Lateness is the slip at the last stop the driver reached. Once nothing
+      // is left to serve it describes the past, so a vehicle on its way home is
+      // returning, not late.
+      const late = next ? lateMinutes(trip.stops) : 0;
+      const stopPoints = trip.stops.flatMap((s) =>
+        s.outlet.lat != null && s.outlet.lng != null ? [{ lat: s.outlet.lat, lng: s.outlet.lng }] : [],
+      );
+      const waypoints = depotAt ? [depotAt, ...stopPoints, depotAt] : stopPoints;
+      const route = waypoints.length >= 2 ? await routeFor(waypoints) : null;
+
+      return {
+        ...base,
         state: mapStateOf({
           tripStatus: trip.status,
           stopStatuses: trip.stops.map((s) => s.status),
@@ -422,7 +473,6 @@ export async function loadFleetPositions(depotCode: string, date: Date, now: Dat
         }),
         lateMinutes: late,
         trip: { tripId: trip.id, tripNo: trip.tripNo, districtName: trip.districtName },
-        position: position ? positionView(position) : null,
         nextStop: next
           ? {
               outletId: next.outletId,
@@ -436,18 +486,29 @@ export async function loadFleetPositions(depotCode: string, date: Date, now: Dat
               windowClose: next.outlet.windowClose,
             }
           : null,
-      },
-    ];
-  });
+        stops: trip.stops.map((s, i) => ({
+          stopNumber: i + 1,
+          outletId: s.outletId,
+          outletName: s.outlet.displayName ?? s.outlet.id,
+          status: s.status,
+          lat: s.outlet.lat,
+          lng: s.outlet.lng,
+        })),
+        route: route ? { polyline: route.polyline, km: Math.round(route.km * 10) / 10, live: route.live } : null,
+      };
+    }),
+  );
 
   return {
     date: date.toISOString().slice(0, 10),
     depotCode,
+    depot: depotAt ? { code: depotCode, name: depot?.name ?? `${depotCode} depot`, ...depotAt } : null,
     updatedAt: now.toISOString(),
     summary: {
       all: entries.length,
       late: entries.filter((e) => e.state === "LATE").length,
       lamp: entries.filter((e) => e.state === "LAMP").length,
+      idle: entries.filter((e) => e.state === "IDLE").length,
     },
     vehicles: entries,
   };

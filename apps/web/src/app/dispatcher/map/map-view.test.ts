@@ -14,12 +14,16 @@ import {
 
 function vehicle(overrides: Partial<MapVehicle> & { vehicleId: string }): MapVehicle {
   return {
+    vehicleType: "truck",
+    vehicleTemp: "ambient",
     driverName: null,
     state: "ON_TIME",
     lateMinutes: 0,
     trip: { tripId: "t", tripNo: 1, districtName: "Colombo" },
     position: { lat: 6.9, lng: 79.9, accuracyM: 10, recordedAt: "2026-04-09T01:00:00.000Z", ageSeconds: 120, lamp: false },
     nextStop: { outletId: "OUT040", outletName: "Fresh Colombo", stopNumber: 2, totalStops: 4, deliveredStops: 1, eta: "07:21", windowOpen: "05:30", windowClose: "08:00" },
+    stops: [],
+    route: null,
     ...overrides,
   };
 }
@@ -33,13 +37,14 @@ const FLEET: MapVehicle[] = [
   }),
   vehicle({ vehicleId: "VEH103", state: "RETURNING", nextStop: null }),
   vehicle({ vehicleId: "VEH104", state: "NOT_STARTED", position: null }),
+  vehicle({ vehicleId: "VEH105", state: "IDLE", trip: null, nextStop: null, position: null }),
 ];
 
 describe("filters", () => {
   it("late and lamp pick exactly their state", () => {
     expect(filterMapVehicles(FLEET, "late", "").map((v) => v.vehicleId)).toEqual(["VEH101"]);
     expect(filterMapVehicles(FLEET, "lamp", "").map((v) => v.vehicleId)).toEqual(["VEH102"]);
-    expect(filterMapVehicles(FLEET, "all", "")).toHaveLength(4);
+    expect(filterMapVehicles(FLEET, "all", "")).toHaveLength(5);
   });
 
   it("search matches id, driver, district and outlet", () => {
@@ -56,7 +61,13 @@ describe("filters", () => {
   });
 
   it("takes chip counts from the summary", () => {
-    expect(filterCounts({ all: 3, late: 1, lamp: 1 })).toEqual({ all: 3, late: 1, lamp: 1 });
+    expect(filterCounts({ all: 3, late: 1, lamp: 1, idle: 1 })).toEqual({ all: 3, late: 1, lamp: 1, idle: 1 });
+  });
+
+  it("finds the vehicles at the depot with no trip, and searches them without one", () => {
+    expect(filterMapVehicles(FLEET, "idle", "").map((v) => v.vehicleId)).toEqual(["VEH105"]);
+    expect(filterMapVehicles(FLEET, "all", "veh105").map((v) => v.vehicleId)).toEqual(["VEH105"]);
+    expect(parseFilter("idle")).toBe("idle");
   });
 });
 
@@ -81,6 +92,7 @@ describe("labels", () => {
     expect(reportLine(FLEET[1]!)).toBe("Last reliable update 22 min ago");
     expect(reportLine(vehicle({ vehicleId: "X", state: "ON_TIME", position: null }))).toBe("No position reported yet");
     expect(reportLine(FLEET[3]!)).toBe("At the dock");
+    expect(reportLine(FLEET[4]!)).toBe("No trip · no report");
   });
 
   it("always calls the ETA an estimate, and Lamp's a rougher one", () => {
@@ -93,5 +105,6 @@ describe("labels", () => {
     expect(progressLine(FLEET[0]!)).toBe("Stop 2 of 4");
     expect(progressLine(FLEET[2]!)).toBe("All stops done");
     expect(progressLine(vehicle({ vehicleId: "X", state: "NOT_STARTED", nextStop: null }))).toBe("Not yet departed");
+    expect(progressLine(FLEET[4]!)).toBe("No trip out on this day");
   });
 });

@@ -192,16 +192,55 @@ const NEXT_STOP = {
   },
 } as const;
 
+const MAP_STOP = {
+  type: "object",
+  additionalProperties: false,
+  required: ["stopNumber", "outletId", "outletName", "status", "lat", "lng"],
+  properties: {
+    stopNumber: { type: "integer", minimum: 1 },
+    outletId: { type: "string" },
+    outletName: { type: "string" },
+    status: { type: "string", enum: ["PENDING", "ARRIVED", "UNLOADING", "DONE", "SKIPPED", "FAILED"] },
+    lat: nullable({ type: "number" }),
+    lng: nullable({ type: "number" }),
+  },
+} as const;
+
+const MAP_ROUTE = {
+  type: "object",
+  additionalProperties: false,
+  required: ["polyline", "km", "live"],
+  properties: {
+    polyline: { type: "string" },
+    km: { type: "number", minimum: 0 },
+    live: { type: "boolean" },
+  },
+} as const;
+
 const MAP_VEHICLE = {
   type: "object",
   additionalProperties: false,
-  required: ["vehicleId", "driverName", "state", "lateMinutes", "trip", "position", "nextStop"],
+  required: [
+    "vehicleId",
+    "vehicleType",
+    "vehicleTemp",
+    "driverName",
+    "state",
+    "lateMinutes",
+    "trip",
+    "position",
+    "nextStop",
+    "stops",
+    "route",
+  ],
   properties: {
     vehicleId: { type: "string" },
+    vehicleType: nullable({ type: "string", enum: ["truck", "van"] }),
+    vehicleTemp: nullable({ type: "string", enum: ["reefer", "ambient"] }),
     driverName: nullable({ type: "string" }),
-    state: { type: "string", enum: ["ON_TIME", "LATE", "RETURNING", "LAMP", "NOT_STARTED"] },
+    state: { type: "string", enum: ["ON_TIME", "LATE", "RETURNING", "LAMP", "NOT_STARTED", "IDLE"] },
     lateMinutes: { type: "integer", minimum: 0 },
-    trip: {
+    trip: nullable({
       type: "object",
       additionalProperties: false,
       required: ["tripId", "tripNo", "districtName"],
@@ -210,25 +249,38 @@ const MAP_VEHICLE = {
         tripNo: { type: "integer" },
         districtName: { type: "string" },
       },
-    },
+    }),
     position: nullable(POSITION),
     nextStop: nullable(NEXT_STOP),
+    stops: { type: "array", items: MAP_STOP },
+    route: nullable(MAP_ROUTE),
   },
 } as const;
 
 const FLEET_POSITIONS = {
   type: "object",
   additionalProperties: false,
-  required: ["date", "depotCode", "updatedAt", "summary", "vehicles"],
+  required: ["date", "depotCode", "depot", "updatedAt", "summary", "vehicles"],
   properties: {
     date: { type: "string", pattern: DATE_ONLY },
     depotCode: { type: "string" },
+    depot: nullable({
+      type: "object",
+      additionalProperties: false,
+      required: ["code", "name", "lat", "lng"],
+      properties: { code: { type: "string" }, name: { type: "string" }, lat: { type: "number" }, lng: { type: "number" } },
+    }),
     updatedAt: { type: "string" },
     summary: {
       type: "object",
       additionalProperties: false,
-      required: ["all", "late", "lamp"],
-      properties: { all: { type: "integer" }, late: { type: "integer" }, lamp: { type: "integer" } },
+      required: ["all", "late", "lamp", "idle"],
+      properties: {
+        all: { type: "integer" },
+        late: { type: "integer" },
+        lamp: { type: "integer" },
+        idle: { type: "integer" },
+      },
     },
     vehicles: { type: "array", items: MAP_VEHICLE },
   },

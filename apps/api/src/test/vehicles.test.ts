@@ -28,6 +28,7 @@ import {
 vi.mock("../lib/db.js", () => ({
   prisma: {
     vehicle: { findMany: vi.fn() },
+    depot: { findUnique: vi.fn() },
     vehicleDayStatus: { findMany: vi.fn(), findUnique: vi.fn() },
     trip: { findMany: vi.fn() },
     user: { findMany: vi.fn() },
@@ -523,6 +524,18 @@ describe("the vehicle routes", () => {
       displayName: name,
       windowOpen: "05:30",
       windowClose: "08:00",
+      lat: 7.5 + Number(id.replace(/\D/g, "") || 0) / 1000,
+      lng: 79.8,
+    });
+
+    beforeEach(() => {
+      // No road network in a test: routes are the straight-line stand-in.
+      delete process.env.OSRM_URL;
+      vi.mocked(prisma.depot.findUnique).mockResolvedValue({ code: "Peliyagoda", name: "Peliyagoda depot", lat: 6.9689, lng: 79.8936 } as never);
+      vi.mocked(prisma.vehicle.findMany).mockResolvedValue([] as never);
+      vi.mocked(prisma.vehicleDayStatus.findMany).mockResolvedValue([] as never);
+      vi.mocked(prisma.vehiclePing.findMany).mockResolvedValue([] as never);
+      vi.mocked(prisma.user.findMany).mockResolvedValue([] as never);
     });
     // 06:00 Colombo is 00:30Z.
     const stop = (seq: number, status: string, planned: string, arrivedAtZ: string | null, outletId = `OUT${seq}`) => ({
@@ -606,7 +619,7 @@ describe("the vehicle routes", () => {
         VEH043: "LAMP",
         VEH050: "LAMP",
       });
-      expect(body.summary).toEqual({ all: 6, late: 1, lamp: 2 });
+      expect(body.summary).toEqual({ all: 6, late: 1, lamp: 2, idle: 0 });
       expect(body.updatedAt).toBe("2026-04-09T01:20:00.000Z");
     });
 
@@ -666,6 +679,49 @@ describe("the vehicle routes", () => {
 
       expect(body.vehicles).toHaveLength(1);
       expect(body.vehicles[0].trip.tripNo).toBe(1);
+    });
+
+    it("lists every vehicle that can run, idle ones included, and leaves out the workshop", async () => {
+      vi.mocked(prisma.vehicle.findMany).mockResolvedValue([
+        { id: "VEH025", type: "truck", temp: "reefer" },
+        { id: "VEH040", type: "van", temp: "ambient" },
+        { id: "VEH041", type: "van", temp: "ambient" },
+      ] as never);
+      vi.mocked(prisma.vehicleDayStatus.findMany).mockResolvedValue([{ vehicleId: "VEH041" }] as never);
+      vi.mocked(prisma.trip.findMany).mockResolvedValue([trip("VEH025", "DEPARTED", [stop(0, "PENDING", "07:00", null)])] as never);
+      vi.mocked(prisma.vehiclePing.findMany).mockResolvedValue([ping("VEH040", "01:19")] as never);
+      const server = await serverFor(dispatcher);
+
+      const body = (await server.inject({ method: "GET", url: "/v1/fleet/positions?date=2026-04-09" })).json();
+
+      expect(body.vehicles.map((v: { vehicleId: string }) => v.vehicleId)).toEqual(["VEH025", "VEH040"]);
+      const idle = body.vehicles[1];
+      expect(idle).toMatchObject({ state: "IDLE", trip: null, nextStop: null, stops: [], route: null, vehicleType: "van" });
+      // An idle vehicle's position is still only ever what its phone reported.
+      expect(idle.position).toMatchObject({ lat: 7.6, lng: 79.8 });
+      expect(body.summary).toMatchObject({ all: 2, idle: 1 });
+      expect(vi.mocked(prisma.vehicleDayStatus.findMany).mock.calls[0]![0]).toMatchObject({
+        where: { status: "IN_WORKSHOP", vehicle: { depotCode: "Peliyagoda" } },
+      });
+    });
+
+    it("gives each trip its stops and a route out from the depot and back", async () => {
+      vi.mocked(prisma.trip.findMany).mockResolvedValue([
+        trip("VEH025", "DEPARTED", [stop(0, "DONE", "06:00", "00:30"), stop(1, "PENDING", "07:21", null, "OUT074")]),
+      ] as never);
+      const server = await serverFor(dispatcher);
+
+      const body = (await server.inject({ method: "GET", url: "/v1/fleet/positions?date=2026-04-09" })).json();
+      const v = body.vehicles[0];
+
+      expect(body.depot).toEqual({ code: "Peliyagoda", name: "Peliyagoda depot", lat: 6.9689, lng: 79.8936 });
+      expect(v.stops).toEqual([
+        { stopNumber: 1, outletId: "OUT0", outletName: "OUT0", status: "DONE", lat: 7.5, lng: 79.8 },
+        { stopNumber: 2, outletId: "OUT074", outletName: "Fresh Puttalam", status: "PENDING", lat: 7.574, lng: 79.8 },
+      ]);
+      // Without the road network the route is honest about being a straight line.
+      expect(v.route).toMatchObject({ live: false });
+      expect(v.route.km).toBeGreaterThan(0);
     });
 
     it("is dispatcher only", async () => {

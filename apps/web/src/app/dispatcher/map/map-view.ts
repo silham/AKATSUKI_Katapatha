@@ -6,12 +6,13 @@ export type MapVehicle = components["schemas"]["MapVehicle"];
 type MapState = components["schemas"]["MapState"];
 type Summary = components["schemas"]["FleetPositions"]["summary"];
 
-export type MapFilter = "all" | "late" | "lamp";
+export type MapFilter = "all" | "late" | "lamp" | "idle";
 
 export const FILTERS: { key: MapFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "late", label: "Late" },
   { key: "lamp", label: "Lamp Mode" },
+  { key: "idle", label: "At the depot" },
 ];
 
 export function parseFilter(value: string | string[] | undefined): MapFilter {
@@ -27,13 +28,14 @@ export function parseFilter(value: string | string[] | undefined): MapFilter {
  */
 export const STATE_VIEW: Record<
   MapState,
-  { label: string; tone: Tone; fill: string; stroke: string; leg: string; iconTile: string }
+  { label: string; tone: Tone; fill: string; stroke: string; leg: string; iconTile: string; dot: string }
 > = {
-  ON_TIME: { label: "On time", tone: "good", fill: "fill-good", stroke: "stroke-good", leg: "stroke-good", iconTile: "border border-good/25 bg-good-surface text-good-ink" },
-  LATE: { label: "Late", tone: "warn", fill: "fill-warn", stroke: "stroke-warn", leg: "stroke-warn", iconTile: "border border-warn/30 bg-warn-surface text-warn-ink" },
-  RETURNING: { label: "Returning", tone: "info", fill: "fill-info", stroke: "stroke-info", leg: "stroke-info", iconTile: "border border-info/25 bg-info-surface text-info-ink" },
-  LAMP: { label: "Lamp Mode", tone: "warn", fill: "fill-surface", stroke: "stroke-warn", leg: "stroke-warn", iconTile: "border border-dashed border-warn bg-surface text-warn-ink" },
-  NOT_STARTED: { label: "At the dock", tone: "neutral", fill: "fill-muted", stroke: "stroke-muted", leg: "stroke-muted", iconTile: "border border-line bg-raised text-muted" },
+  ON_TIME: { label: "On time", tone: "good", fill: "fill-good", stroke: "stroke-good", leg: "stroke-good", iconTile: "border border-good/25 bg-good-surface text-good-ink", dot: "bg-good" },
+  LATE: { label: "Late", tone: "warn", fill: "fill-warn", stroke: "stroke-warn", leg: "stroke-warn", iconTile: "border border-warn/30 bg-warn-surface text-warn-ink", dot: "bg-warn" },
+  RETURNING: { label: "Returning", tone: "info", fill: "fill-info", stroke: "stroke-info", leg: "stroke-info", iconTile: "border border-info/25 bg-info-surface text-info-ink", dot: "bg-info" },
+  LAMP: { label: "Lamp Mode", tone: "warn", fill: "fill-surface", stroke: "stroke-warn", leg: "stroke-warn", iconTile: "border border-dashed border-warn bg-surface text-warn-ink", dot: "bg-surface" },
+  NOT_STARTED: { label: "Loading", tone: "neutral", fill: "fill-muted", stroke: "stroke-muted", leg: "stroke-muted", iconTile: "border border-line bg-raised text-muted", dot: "bg-muted" },
+  IDLE: { label: "At the depot", tone: "neutral", fill: "fill-surface", stroke: "stroke-muted", leg: "stroke-muted", iconTile: "border border-dashed border-line bg-surface text-muted", dot: "bg-surface" },
 };
 
 /** "Late 12 min" for a late vehicle, the plain state label otherwise. */
@@ -44,6 +46,7 @@ export function stateLabel(vehicle: Pick<MapVehicle, "state" | "lateMinutes">): 
 export function matchesFilter(vehicle: MapVehicle, filter: MapFilter): boolean {
   if (filter === "late") return vehicle.state === "LATE";
   if (filter === "lamp") return vehicle.state === "LAMP";
+  if (filter === "idle") return vehicle.state === "IDLE";
   return true;
 }
 
@@ -54,7 +57,7 @@ export function matchesQuery(vehicle: MapVehicle, query: string): boolean {
   return [
     vehicle.vehicleId,
     vehicle.driverName ?? "",
-    vehicle.trip.districtName,
+    vehicle.trip?.districtName ?? "",
     vehicle.nextStop?.outletId ?? "",
     vehicle.nextStop?.outletName ?? "",
   ].some((field) => field.toLowerCase().includes(needle));
@@ -66,7 +69,7 @@ export function filterMapVehicles(vehicles: MapVehicle[], filter: MapFilter, que
 
 /** Chip counts come from the API summary so they never depend on the search box. */
 export function filterCounts(summary: Summary): Record<MapFilter, number> {
-  return { all: summary.all, late: summary.late, lamp: summary.lamp };
+  return { all: summary.all, late: summary.late, lamp: summary.lamp, idle: summary.idle };
 }
 
 /** Vehicles that have a position to draw. A never-reported vehicle is listed, not placed. */
@@ -87,7 +90,10 @@ export function reportedAt(position: NonNullable<MapVehicle["position"]>): strin
  */
 export function reportLine(vehicle: MapVehicle): string {
   const { position } = vehicle;
-  if (!position) return vehicle.state === "NOT_STARTED" ? "At the dock" : "No position reported yet";
+  if (!position) {
+    if (vehicle.state === "IDLE") return "No trip · no report";
+    return vehicle.state === "NOT_STARTED" ? "At the dock" : "No position reported yet";
+  }
   const age = ageLabel(position.ageSeconds);
   return vehicle.state === "LAMP" ? `Last reliable update ${age}` : `Reported ${age}`;
 }
@@ -101,6 +107,7 @@ export function etaLabel(vehicle: Pick<MapVehicle, "state" | "nextStop">): strin
 /** "Stop 2 of 4" for a vehicle with stops left, "Returning · all stops done" otherwise. */
 export function progressLine(vehicle: MapVehicle): string {
   const stop = vehicle.nextStop;
+  if (vehicle.state === "IDLE") return "No trip out on this day";
   if (!stop) return vehicle.state === "NOT_STARTED" ? "Not yet departed" : "All stops done";
   return `Stop ${stop.stopNumber} of ${stop.totalStops}`;
 }

@@ -42,7 +42,11 @@ export function DateControl({
       </Link>
       <label className="flex items-center">
         <span className="sr-only">Date, currently {longDate(date)}</span>
+        {/* Keyed on the date: the form survives a client navigation, and an
+            uncontrolled input keeps showing the day it was first rendered with
+            unless React is told it is a new one. */}
         <input
+          key={date}
           type="date"
           name="date"
           defaultValue={date}

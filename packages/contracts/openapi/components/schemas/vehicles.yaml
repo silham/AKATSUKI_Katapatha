@@ -178,11 +178,15 @@ VehicleDetail:
 
 MapState:
   type: string
-  enum: [ON_TIME, LATE, RETURNING, LAMP, NOT_STARTED]
+  enum: [ON_TIME, LATE, RETURNING, LAMP, NOT_STARTED, IDLE]
   description: >
     The state of the vehicle's current trip on the map. Precedence, strongest
     first: LAMP > LATE > RETURNING > ON_TIME.
 
+    - IDLE: the vehicle can run today (not in the workshop) but has no trip
+      out, sealed or loading. It has no trip, stops or route. Its position is
+      only ever a report; one that has not reported is at the depot by
+      inference, and the client says so rather than placing it.
     - NOT_STARTED: the trip is READY or LOADING, so the vehicle is at the dock. Reported
       regardless of position; a missing report at the dock is not an alarm.
     - LAMP: the trip has departed and either the phone has never reported, or
@@ -213,9 +217,14 @@ MapNextStop:
 
 MapVehicle:
   type: object
-  required: [vehicleId, driverName, state, lateMinutes, trip, position, nextStop]
+  description: >
+    One vehicle that can run on the day: every vehicle at the depot that is
+    not in the workshop, whether or not it has a trip.
+  required: [vehicleId, vehicleType, vehicleTemp, driverName, state, lateMinutes, trip, position, nextStop, stops, route]
   properties:
     vehicleId: { type: string, examples: ["VEH025"] }
+    vehicleType: { type: [string, "null"], enum: [truck, van, null] }
+    vehicleTemp: { type: [string, "null"], enum: [reefer, ambient, null] }
     driverName: { type: [string, "null"], examples: ["K. Fernando"] }
     state: { $ref: "./vehicles.yaml#/MapState" }
     lateMinutes:
@@ -226,7 +235,8 @@ MapVehicle:
         time, before the first arrival, or once no stop is left to serve.
       examples: [0]
     trip:
-      type: object
+      description: The trip the map shows the vehicle on. Null for an IDLE vehicle.
+      type: [object, "null"]
       required: [tripId, tripNo, districtName]
       properties:
         tripId: { type: string, examples: ["clx0trp1a2b3c4d5e6f7g8h9"] }
@@ -241,13 +251,53 @@ MapVehicle:
       oneOf:
         - $ref: "./vehicles.yaml#/MapNextStop"
         - type: "null"
+    stops:
+      type: array
+      description: The trip's stops in delivery order, with each outlet's position (null where none is known). Empty for an IDLE vehicle.
+      items: { $ref: "./vehicles.yaml#/MapStop" }
+    route:
+      description: >
+        The trip's road route, depot → stops → depot. OpenStreetMap road
+        geometry from OSRM when `live` is true; a straight line through the
+        same points when the road network could not answer. Null without a trip.
+      oneOf:
+        - $ref: "./vehicles.yaml#/MapRoute"
+        - type: "null"
+
+MapStop:
+  type: object
+  required: [stopNumber, outletId, outletName, status, lat, lng]
+  properties:
+    stopNumber: { type: integer, minimum: 1, examples: [1] }
+    outletId: { type: string, examples: ["OUT074"] }
+    outletName: { type: string, examples: ["Fresh Puttalam"] }
+    status: { $ref: "./common.yaml#/StopStatus" }
+    lat: { type: [number, "null"], examples: [8.0362] }
+    lng: { type: [number, "null"], examples: [79.8283] }
+
+MapRoute:
+  type: object
+  required: [polyline, km, live]
+  properties:
+    polyline: { type: string, description: "Encoded polyline, precision 6 (OSRM polyline6).", examples: ["_p~iF~ps|U_ulLnnqC_mqNvxq`@"] }
+    km: { type: number, minimum: 0, examples: [128.4] }
+    live: { type: boolean, description: "True for road geometry; false for a straight-line stand-in.", examples: [true] }
 
 FleetPositions:
   type: object
-  required: [date, depotCode, updatedAt, summary, vehicles]
+  required: [date, depotCode, depot, updatedAt, summary, vehicles]
   properties:
     date: { $ref: "./common.yaml#/DateOnly" }
     depotCode: { type: string, examples: ["Peliyagoda"] }
+    depot:
+      description: Where the depot is, for centring the map. Null if no position is known.
+      type: [object, "null"]
+      required: [code, name, lat, lng]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        lat: { type: number }
+        lng: { type: number }
     updatedAt:
       type: string
       format: date-time
@@ -255,11 +305,12 @@ FleetPositions:
     summary:
       type: object
       description: Counts for the list tabs.
-      required: [all, late, lamp]
+      required: [all, late, lamp, idle]
       properties:
         all: { type: integer, examples: [3] }
         late: { type: integer, examples: [1] }
         lamp: { type: integer, examples: [1] }
+        idle: { type: integer, examples: [0] }
     vehicles:
       type: array
       items: { $ref: "./vehicles.yaml#/MapVehicle" }

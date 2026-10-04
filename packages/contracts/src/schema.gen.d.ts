@@ -946,7 +946,7 @@ export interface paths {
         };
         /**
          * The map's vehicles for a day
-         * @description Dispatcher only, own depot only. One entry per vehicle that has a DEPARTED trip, or one that is READY or LOADING, on the day's published plan — and a departed trip whose stops are all finished (RETURNING). A vehicle with both a departed and a waiting trip is shown on the departed one.
+         * @description Dispatcher only, own depot only. One entry per vehicle that can run on the day (not in the workshop). A vehicle with a DEPARTED, READY or LOADING trip on the day's published plan is shown on that trip, with its stops and road route; one with none is IDLE — and a departed trip whose stops are all finished (RETURNING). A vehicle with both a departed and a waiting trip is shown on the departed one.
          *     Positions are whatever the driver's phone last reported, with their age. This is not live tracking: a vehicle that has never reported has a null position, and none is invented for it. The map is schematic — stops are drawn at their district centre and legs are straight lines, not roads.
          *     State precedence, strongest first: LAMP > LATE > RETURNING > ON_TIME; a trip not yet departed is NOT_STARTED. See MapState.
          */
@@ -3132,6 +3132,10 @@ export interface components {
         };
         /**
          * @description The state of the vehicle's current trip on the map. Precedence, strongest first: LAMP > LATE > RETURNING > ON_TIME.
+         *     - IDLE: the vehicle can run today (not in the workshop) but has no trip
+         *       out, sealed or loading. It has no trip, stops or route. Its position is
+         *       only ever a report; one that has not reported is at the depot by
+         *       inference, and the client says so rather than placing it.
          *     - NOT_STARTED: the trip is READY or LOADING, so the vehicle is at the dock. Reported
          *       regardless of position; a missing report at the dock is not an alarm.
          *     - LAMP: the trip has departed and either the phone has never reported, or
@@ -3140,7 +3144,7 @@ export interface components {
          *     - LATE: lateMinutes is 5 or more. - RETURNING: no stop is left to serve (every stop DONE, SKIPPED or FAILED) but the trip is not COMPLETED. - ON_TIME: otherwise.
          * @enum {string}
          */
-        MapState: "ON_TIME" | "LATE" | "RETURNING" | "LAMP" | "NOT_STARTED";
+        MapState: "ON_TIME" | "LATE" | "RETURNING" | "LAMP" | "NOT_STARTED" | "IDLE";
         /** @description The first stop the driver still has to serve, including one they are standing at. */
         MapNextStop: {
             /** @example OUT074 */
@@ -3164,9 +3168,41 @@ export interface components {
             windowOpen: components["schemas"]["ClockTime"];
             windowClose: components["schemas"]["ClockTime"];
         };
+        MapStop: {
+            /** @example 1 */
+            stopNumber: number;
+            /** @example OUT074 */
+            outletId: string;
+            /** @example Fresh Puttalam */
+            outletName: string;
+            status: components["schemas"]["StopStatus"];
+            /** @example 8.0362 */
+            lat: number | null;
+            /** @example 79.8283 */
+            lng: number | null;
+        };
+        MapRoute: {
+            /**
+             * @description Encoded polyline, precision 6 (OSRM polyline6).
+             * @example _p~iF~ps|U_ulLnnqC_mqNvxq`@
+             */
+            polyline: string;
+            /** @example 128.4 */
+            km: number;
+            /**
+             * @description True for road geometry; false for a straight-line stand-in.
+             * @example true
+             */
+            live: boolean;
+        };
+        /** @description One vehicle that can run on the day: every vehicle at the depot that is not in the workshop, whether or not it has a trip. */
         MapVehicle: {
             /** @example VEH025 */
             vehicleId: string;
+            /** @enum {string|null} */
+            vehicleType: "truck" | "van" | null;
+            /** @enum {string|null} */
+            vehicleTemp: "reefer" | "ambient" | null;
             /** @example K. Fernando */
             driverName: string | null;
             state: components["schemas"]["MapState"];
@@ -3175,6 +3211,7 @@ export interface components {
              * @example 0
              */
             lateMinutes: number;
+            /** @description The trip the map shows the vehicle on. Null for an IDLE vehicle. */
             trip: {
                 /** @example clx0trp1a2b3c4d5e6f7g8h9 */
                 tripId: string;
@@ -3182,15 +3219,26 @@ export interface components {
                 tripNo: number;
                 /** @example Puttalam */
                 districtName: string;
-            };
+            } | null;
             /** @description Null for a vehicle that has never reported. No position is invented for it. */
             position: components["schemas"]["ReportedPosition"] | null;
             nextStop: components["schemas"]["MapNextStop"] | null;
+            /** @description The trip's stops in delivery order, with each outlet's position (null where none is known). Empty for an IDLE vehicle. */
+            stops: components["schemas"]["MapStop"][];
+            /** @description The trip's road route, depot → stops → depot. OpenStreetMap road geometry from OSRM when `live` is true; a straight line through the same points when the road network could not answer. Null without a trip. */
+            route: components["schemas"]["MapRoute"] | null;
         };
         FleetPositions: {
             date: components["schemas"]["DateOnly"];
             /** @example Peliyagoda */
             depotCode: string;
+            /** @description Where the depot is, for centring the map. Null if no position is known. */
+            depot: {
+                code: string;
+                name: string;
+                lat: number;
+                lng: number;
+            } | null;
             /**
              * Format: date-time
              * @description Server time when this response was assembled. Not a claim that positions are current — each carries its own age.
@@ -3204,6 +3252,8 @@ export interface components {
                 late: number;
                 /** @example 1 */
                 lamp: number;
+                /** @example 0 */
+                idle: number;
             };
             vehicles: components["schemas"]["MapVehicle"][];
         };
@@ -6877,15 +6927,24 @@ export interface operations {
                      * @example {
                      *       "date": "2026-09-29",
                      *       "depotCode": "Peliyagoda",
+                     *       "depot": {
+                     *         "code": "Peliyagoda",
+                     *         "name": "Peliyagoda depot",
+                     *         "lat": 6.9689,
+                     *         "lng": 79.8936
+                     *       },
                      *       "updatedAt": "2026-09-29T01:12:00.000Z",
                      *       "summary": {
-                     *         "all": 3,
+                     *         "all": 4,
                      *         "late": 1,
-                     *         "lamp": 1
+                     *         "lamp": 1,
+                     *         "idle": 1
                      *       },
                      *       "vehicles": [
                      *         {
                      *           "vehicleId": "VEH025",
+                     *           "vehicleType": "truck",
+                     *           "vehicleTemp": "reefer",
                      *           "driverName": "K. Fernando",
                      *           "state": "ON_TIME",
                      *           "lateMinutes": 0,
@@ -6911,10 +6970,35 @@ export interface operations {
                      *             "eta": "07:21",
                      *             "windowOpen": "05:30",
                      *             "windowClose": "08:00"
+                     *           },
+                     *           "stops": [
+                     *             {
+                     *               "stopNumber": 1,
+                     *               "outletId": "OUT070",
+                     *               "outletName": "Fresh Chilaw",
+                     *               "status": "DONE",
+                     *               "lat": 7.5758,
+                     *               "lng": 79.7953
+                     *             },
+                     *             {
+                     *               "stopNumber": 2,
+                     *               "outletId": "OUT074",
+                     *               "outletName": "Fresh Puttalam",
+                     *               "status": "PENDING",
+                     *               "lat": 8.0362,
+                     *               "lng": 79.8283
+                     *             }
+                     *           ],
+                     *           "route": {
+                     *             "polyline": "o~`iLcwmyvCowGfrA",
+                     *             "km": 128.4,
+                     *             "live": true
                      *           }
                      *         },
                      *         {
                      *           "vehicleId": "VEH018",
+                     *           "vehicleType": "truck",
+                     *           "vehicleTemp": "reefer",
                      *           "driverName": "R. Dias",
                      *           "state": "LATE",
                      *           "lateMinutes": 12,
@@ -6940,10 +7024,35 @@ export interface operations {
                      *             "eta": "07:48",
                      *             "windowOpen": "06:00",
                      *             "windowClose": "09:00"
+                     *           },
+                     *           "stops": [
+                     *             {
+                     *               "stopNumber": 1,
+                     *               "outletId": "OUT070",
+                     *               "outletName": "Fresh Chilaw",
+                     *               "status": "DONE",
+                     *               "lat": 7.5758,
+                     *               "lng": 79.7953
+                     *             },
+                     *             {
+                     *               "stopNumber": 2,
+                     *               "outletId": "OUT074",
+                     *               "outletName": "Fresh Puttalam",
+                     *               "status": "PENDING",
+                     *               "lat": 8.0362,
+                     *               "lng": 79.8283
+                     *             }
+                     *           ],
+                     *           "route": {
+                     *             "polyline": "o~`iLcwmyvCowGfrA",
+                     *             "km": 128.4,
+                     *             "live": true
                      *           }
                      *         },
                      *         {
                      *           "vehicleId": "VEH043",
+                     *           "vehicleType": "truck",
+                     *           "vehicleTemp": "reefer",
                      *           "driverName": "S. Perera",
                      *           "state": "LAMP",
                      *           "lateMinutes": 0,
@@ -6969,7 +7078,43 @@ export interface operations {
                      *             "eta": "07:05",
                      *             "windowOpen": "06:00",
                      *             "windowClose": "09:30"
+                     *           },
+                     *           "stops": [
+                     *             {
+                     *               "stopNumber": 1,
+                     *               "outletId": "OUT070",
+                     *               "outletName": "Fresh Chilaw",
+                     *               "status": "DONE",
+                     *               "lat": 7.5758,
+                     *               "lng": 79.7953
+                     *             },
+                     *             {
+                     *               "stopNumber": 2,
+                     *               "outletId": "OUT074",
+                     *               "outletName": "Fresh Puttalam",
+                     *               "status": "PENDING",
+                     *               "lat": 8.0362,
+                     *               "lng": 79.8283
+                     *             }
+                     *           ],
+                     *           "route": {
+                     *             "polyline": "o~`iLcwmyvCowGfrA",
+                     *             "km": 128.4,
+                     *             "live": true
                      *           }
+                     *         },
+                     *         {
+                     *           "vehicleId": "VEH040",
+                     *           "vehicleType": "van",
+                     *           "vehicleTemp": "ambient",
+                     *           "driverName": null,
+                     *           "state": "IDLE",
+                     *           "lateMinutes": 0,
+                     *           "trip": null,
+                     *           "position": null,
+                     *           "nextStop": null,
+                     *           "stops": [],
+                     *           "route": null
                      *         }
                      *       ]
                      *     }
