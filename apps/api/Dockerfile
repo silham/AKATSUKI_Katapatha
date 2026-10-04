@@ -1,7 +1,12 @@
 # Multi-stage: the runtime image carries no toolchain and no source.
 FROM node:24-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
-RUN corepack enable
+# Fetch pnpm once, in the base layer both images share, instead of at the first
+# `pnpm install`: a slow or interrupted download then fails here, early and
+# clearly, and a rebuild reuses the cached layer. Keep the version in step with
+# `packageManager` in the root package.json.
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable && corepack prepare pnpm@12.3.4 --activate
 WORKDIR /repo
 
 FROM base AS deps
