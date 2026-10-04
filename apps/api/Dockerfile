@@ -36,4 +36,7 @@ COPY --from=build /repo/apps/api /repo/apps/api
 WORKDIR /repo/apps/api
 EXPOSE 3001
 # Migrate and seed on boot: the demo database must be reproducible from empty.
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm run db:seed && pnpm run db:seed:products && pnpm run db:seed:districts && node dist/main.js"]
+# The binaries are called directly, not through pnpm: pnpm checks the workspace's
+# dependencies before every run and would reinstall from the registry at boot.
+ENV PATH=/repo/apps/api/node_modules/.bin:$PATH
+CMD ["sh", "-c", "prisma migrate deploy && tsx prisma/seed/index.ts && tsx prisma/seed/productsOnly.ts && tsx prisma/seed/districtsOnly.ts && node dist/main.js"]

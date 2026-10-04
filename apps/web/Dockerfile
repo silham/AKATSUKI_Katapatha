@@ -30,4 +30,6 @@ COPY --from=build /repo/packages /repo/packages
 COPY --from=build /repo/apps/web /repo/apps/web
 WORKDIR /repo/apps/web
 EXPOSE 3000
-CMD ["pnpm", "run", "start"]
+# `next start` directly, not `pnpm run start`: pnpm checks the workspace's
+# dependencies before every run and would reinstall from the registry at boot.
+CMD ["node_modules/.bin/next", "start", "-p", "3000"]
