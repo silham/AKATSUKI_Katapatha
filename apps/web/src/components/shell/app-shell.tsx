@@ -27,17 +27,15 @@ import { MobileNav, RailNav } from "./rail-nav";
  * Width is 212px, per DESIGN.md's "persistent 212px rail". The sidebars this
  * replaces had drifted to w-64.
  *
- * `variant="dock"` is the Figma file's unified sidebar (L-02…L-06): a night
- * rail, the role block in flame, a dark active row with a flame bar. Only the
- * loader opts in so far; the other workspaces keep the treatment they shipped
- * with until their own Figma pass.
+ * The rail is the Figma file's unified sidebar (L-02…L-06): a night rail, the
+ * role block in flame, a dark active row with a flame bar. It started as the
+ * loader's opt-in variant and is now the one sidebar every workspace uses.
  */
 export function AppShell({
   role,
   name,
   scope,
   children,
-  variant = "default",
 }: {
   role: Role;
   /** The signed-in person. */
@@ -45,7 +43,6 @@ export function AppShell({
   /** Depot, dock or outlet — the records this session can touch. */
   scope: string;
   children: ReactNode;
-  variant?: "default" | "dock";
 }) {
   const nav = NAV[role];
   const navLabel = `${nav.title} workspace`;
@@ -60,46 +57,7 @@ export function AppShell({
         Skip to workspace
       </a>
 
-      {variant === "dock" ? (
-        <DockRail role={role} name={name} scope={scope} initials={initials} title={nav.title} home={nav.home} label={navLabel} />
-      ) : (
-      <aside className="hidden h-screen w-53 shrink-0 flex-col justify-between bg-rail p-4 text-white lg:sticky lg:top-0 lg:flex">
-        <div className="flex flex-col gap-5">
-          <Link href={nav.home} className="flex items-center">
-            <Image
-              src="/logo/katapatha-lockup-dark.png"
-              alt="Katapatha"
-              width={1600}
-              height={409}
-              className="h-auto w-32"
-              priority
-            />
-          </Link>
-
-          {/* Which depot, dock or outlet this session acts on — the same scope
-              the API's authorization predicates enforce. */}
-          <div className="rounded-card bg-white/10 px-3 py-2.5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">{nav.title}</p>
-            <p className="mt-0.5 truncate text-sm font-semibold text-white">{scope}</p>
-          </div>
-
-          <RailNav role={role} label={navLabel} />
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-card bg-white/5 p-3 text-sm">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-rail">
-              {initials}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">{name}</p>
-              <p className="truncate text-xs text-white/60">{nav.title}</p>
-            </div>
-          </div>
-          <SignOutLink />
-        </div>
-      </aside>
-      )}
+      <DockRail role={role} name={name} scope={scope} initials={initials} title={nav.title} home={nav.home} label={navLabel} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="bg-rail text-white lg:hidden">
@@ -184,7 +142,7 @@ function DockRail({
           </div>
         </div>
 
-        <RailNav role={role} label={label} variant="dock" />
+        <RailNav role={role} label={label} />
       </div>
 
       <div className="border-t border-night-line pt-4">

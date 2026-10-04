@@ -1,6 +1,9 @@
 # Multi-stage: the runtime image carries no toolchain and no source.
 FROM node:24-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
+# Prisma's query engine links against OpenSSL, which the slim image leaves out;
+# without it Prisma guesses openssl-1.1 and the engine fails to load at boot.
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 # Fetch pnpm once, in the base layer both images share, instead of at the first
 # `pnpm install`: a slow or interrupted download then fails here, early and
 # clearly, and a rebuild reuses the cached layer. Keep the version in step with
