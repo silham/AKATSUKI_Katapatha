@@ -12,6 +12,7 @@ import { PrismaClient } from "@prisma/client";
 import { seedForecastShells, seedHeroDay } from "./heroDay";
 import { seedHistory } from "./history";
 import { seedFixtureOrderLines, seedProducts } from "./products";
+import { seedDistricts } from "./districts";
 import { seedGeography } from "./geography";
 import { seedReference } from "./reference";
 import { resolveDataSource, sourceChecksum } from "./source";
@@ -73,6 +74,9 @@ async function main(): Promise<void> {
     `[seed] Positions: ${geography.depots} depots, ${geography.fromCsv} outlets from outlet_locations.csv, ` +
       `${geography.synthetic} placed near their district centre (approximate; run geo:snap for roads).`,
   );
+
+  const addedDistricts = await seedDistricts(prisma);
+  console.log(`[seed] ${addedDistricts} more districts so every district of Sri Lanka can be chosen (estimated travel figures).`);
 
   const users = await seedUsers(prisma);
   console.log(`[seed] ${users} accounts, one per role.`);

@@ -3,8 +3,8 @@
  *
  * The competition datasets describe distance and travel time but carry no
  * latitude or longitude, so the map needs geography from somewhere. These are
- * the well-known positions of the two depots and the twelve district centres
- * the network serves — public geographic fact, not competition data, and kept
+ * the well-known positions of the two depots and the centres of all twenty-five
+ * districts of Sri Lanka — public geographic fact, not competition data, and kept
  * here rather than in the database because nothing derives from them except
  * the picture.
  *
@@ -37,6 +37,19 @@ export const DISTRICT_POSITIONS: Record<string, LatLng> = {
   "Nuwara Eliya": { lat: 6.9497, lng: 80.7891 },
   Badulla: { lat: 6.9934, lng: 81.055 },
   Kegalle: { lat: 7.2513, lng: 80.3464 },
+  Hambantota: { lat: 6.1241, lng: 81.1185 },
+  Ratnapura: { lat: 6.6828, lng: 80.3992 },
+  Monaragala: { lat: 6.8728, lng: 81.3507 },
+  Ampara: { lat: 7.2975, lng: 81.682 },
+  Batticaloa: { lat: 7.717, lng: 81.7 },
+  Trincomalee: { lat: 8.5874, lng: 81.2152 },
+  Polonnaruwa: { lat: 7.9403, lng: 81.0188 },
+  Anuradhapura: { lat: 8.3114, lng: 80.4037 },
+  Vavuniya: { lat: 8.7514, lng: 80.4971 },
+  Mannar: { lat: 8.981, lng: 79.9044 },
+  Mullaitivu: { lat: 9.2671, lng: 80.8142 },
+  Kilinochchi: { lat: 9.3803, lng: 80.377 },
+  Jaffna: { lat: 9.6615, lng: 80.0255 },
 };
 
 /**

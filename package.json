@@ -20,6 +20,7 @@
     "db:seed": "pnpm --filter @katapatha/api db:seed",
     "db:seed:products": "pnpm --filter @katapatha/api db:seed:products",
     "db:seed:geography": "pnpm --filter @katapatha/api db:seed:geography",
+    "db:seed:districts": "pnpm --filter @katapatha/api db:seed:districts",
     "geo:snap": "pnpm --filter @katapatha/api exec tsx prisma/seed/geoSnap.ts",
     "osrm:prepare": "sh scripts/osrm-prepare.sh",
     "osrm:up": "docker compose --profile routing up -d osrm",
