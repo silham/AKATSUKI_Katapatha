@@ -116,10 +116,10 @@ export default function AccessPage() {
             Reviewer access
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-muted">
-            Four seeded demo accounts, one per role. Tap a card to sign in and land on that
-            role&apos;s workspace. Each card shows the staff ID and PIN the real sign-in page asks
-            for, so a reviewer can type them there too. This route is removed
-            in production builds — the only time it exists is on a seeded local database.
+            Five seeded demo accounts: one per role, and an admin. Tap a card to sign in and land on
+            that role&apos;s workspace. Each card shows the staff ID and PIN the real sign-in page
+            asks for, so a reviewer can type them there too. In production this route is a 404
+            unless an operator sets ALLOW_DEMO_ACCESS=1.
           </p>
         </header>
 

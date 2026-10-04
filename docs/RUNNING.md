@@ -88,7 +88,7 @@ export DATABASE_URL="postgresql://katapatha:katapatha@localhost:5432/katapatha?s
 
 ### Seeded accounts
 
-Password is `waypoint` for all four.
+Password is `waypoint` for all five.
 
 | Email | Role | Scope |
 |---|---|---|
@@ -96,6 +96,7 @@ Password is `waypoint` for all four.
 | `ranjith@waypoint.lk` | LOADER | depot Peliyagoda |
 | `sunil@waypoint.lk` | DRIVER | claims a vehicle at the dock |
 | `fathima@waypoint.lk` | STORE_MANAGER | outlet OUT074 |
+| `asha@waypoint.lk` | ADMIN | every depot |
 
 Every sign-in page asks for a **Waypoint staff ID and PIN** (D-01, L-01,
 R-01, S-01):

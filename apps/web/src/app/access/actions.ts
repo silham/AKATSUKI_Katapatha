@@ -18,7 +18,7 @@ const ALLOWED_EMAILS = new Set([
   "asha@waypoint.lk",
 ]);
 
-const SAFE_HOMES = new Set(["/store", "/dispatcher", "/loader", "/driver"]);
+const SAFE_HOMES = new Set(["/store", "/dispatcher", "/loader", "/driver", "/admin"]);
 
 /** Each account signs in the way its sign-in screen does: Waypoint staff ID
  *  and PIN, the seed's (apps/api/prisma/seed/users.ts). */

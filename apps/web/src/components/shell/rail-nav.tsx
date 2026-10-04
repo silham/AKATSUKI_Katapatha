@@ -1,10 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useSyncExternalStore } from "react";
 import type { Role } from "@katapatha/core/domain/roles";
+import { isDateOnly } from "@/lib/dates";
 import { NAV, isCurrent } from "./nav";
 import { NavIcon } from "./nav-icon";
+
+const DAY_KEY = "katapatha:day";
+
+/**
+ * The day the rail's links open on.
+ *
+ * Every desk screen takes `?date=`, and without it opens on today's operating
+ * day. A plain href therefore dropped the day the operator was working on: pick
+ * 9 April on the dashboard, click Planning, and land on an empty day. So the
+ * links carry the URL's `?date=`, and where the URL has none (the plan board is
+ * /dispatcher/plans/{id}) the last day picked in this tab. Storage is a
+ * convenience — if it is unavailable the links fall back to the URL alone.
+ */
+function useCarriedDay(): string | null {
+  const fromUrl = useSearchParams()?.get("date") ?? null;
+  const explicit = isDateOnly(fromUrl) ? fromUrl : null;
+  const remembered = useSyncExternalStore(noSubscription, readDay, () => null);
+
+  useEffect(() => {
+    if (!explicit) return;
+    try {
+      sessionStorage.setItem(DAY_KEY, explicit);
+    } catch {
+      // Private window or blocked storage: the URL is enough.
+    }
+  }, [explicit]);
+
+  return explicit ?? remembered;
+}
+
+function noSubscription() {
+  return () => {};
+}
+
+function readDay(): string | null {
+  try {
+    const stored = sessionStorage.getItem(DAY_KEY);
+    return isDateOnly(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function withDay(href: string, day: string | null): string {
+  return day ? `${href}?date=${day}` : href;
+}
 
 /**
  * The nav links, the shell's only client component.
@@ -22,6 +70,7 @@ import { NavIcon } from "./nav-icon";
 
 export function RailNav({ role, label }: { role: Role; label: string }) {
   const pathname = usePathname() ?? "";
+  const day = useCarriedDay();
   const items = NAV[role].items;
 
   return (
@@ -31,7 +80,7 @@ export function RailNav({ role, label }: { role: Role; label: string }) {
         return (
           <Link
             key={item.href}
-            href={item.href}
+            href={withDay(item.href, day)}
             aria-current={active ? "page" : undefined}
             prefetch={false}
             className={`relative flex min-h-10 items-center gap-3 rounded-[6px] px-4 text-[14.5px] ${
@@ -59,6 +108,7 @@ export function RailNav({ role, label }: { role: Role; label: string }) {
  */
 export function MobileNav({ role, label }: { role: Role; label: string }) {
   const pathname = usePathname() ?? "";
+  const day = useCarriedDay();
   const items = NAV[role].items;
   if (!items.length) return null;
 
@@ -69,7 +119,7 @@ export function MobileNav({ role, label }: { role: Role; label: string }) {
         return (
           <Link
             key={item.href}
-            href={item.href}
+            href={withDay(item.href, day)}
             aria-current={active ? "page" : undefined}
             prefetch={false}
             className={`flex min-h-11 shrink-0 items-center gap-2 rounded-control px-3 text-sm ${

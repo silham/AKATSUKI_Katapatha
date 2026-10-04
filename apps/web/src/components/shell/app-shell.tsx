@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import type { Role } from "@katapatha/core/domain/roles";
 import { NAV, initialsOf } from "./nav";
 import { NavIcon } from "./nav-icon";
@@ -77,7 +77,10 @@ export function AppShell({
             </div>
           </div>
           <span className="sr-only">Signed in as {name}</span>
-          <MobileNav role={role} label={navLabel} />
+          {/* The nav reads ?date= (useSearchParams), which needs a boundary. */}
+          <Suspense fallback={null}>
+            <MobileNav role={role} label={navLabel} />
+          </Suspense>
         </header>
 
         <div id="workspace" tabIndex={-1} className="min-w-0 flex-1">
@@ -142,7 +145,9 @@ function DockRail({
           </div>
         </div>
 
-        <RailNav role={role} label={label} />
+        <Suspense fallback={null}>
+          <RailNav role={role} label={label} />
+        </Suspense>
       </div>
 
       <div className="border-t border-night-line pt-4">
