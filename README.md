@@ -17,6 +17,9 @@ Three apps over one shared, contract-governed API.
 | `apps/web` | dispatcher, loader, store and admin consoles, **and** the driver mobile web | Next.js 16 |
 | `apps/mobile` | the driver native app, with an offline outbox (optional) | Expo / React Native |
 
+**Live:** **https://katapatha.silham.dev**. Sign in with the staff IDs and PINs
+[below](#sign-in). The `/access` shortcut is switched off there.
+
 **Contents:** [Run it](#run-it) · [Sign in](#sign-in) ·
 [Judge walkthrough](#judge-walkthrough) ·
 [Changes since the Designathon design](#changes-since-the-designathon-design) ·
@@ -70,7 +73,16 @@ account with a **Sign in and open …** button. It is a 404 in production unless
 ## Judge walkthrough
 
 One delivery day, end to end, across all four roles. It takes about 20
-minutes. Start from a clean database:
+minutes.
+
+**On the live site** (https://katapatha.silham.dev), follow the steps as
+written, with that host in place of `http://localhost:3000`. The live
+database is shared. If 9 April is already published when you arrive (the
+desk shows **Published** and **Open plan** in place of **Close order
+queue**), someone has done Part 1: read the plan board and continue from
+Part 2.
+
+**Locally**, start from a clean database:
 
 ```bash
 pnpm demo:reset --yes
