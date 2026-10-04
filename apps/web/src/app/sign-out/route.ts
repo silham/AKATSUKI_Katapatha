@@ -14,7 +14,7 @@ const SESSION_COOKIE = "katapatha_session";
  * Reached as a GET so the shell's sign-out link (components/shell/app-shell.tsx) and any
  * other caller works without a <form> wrapper or JS.
  */
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const client = await api();
     await client.DELETE("/auth/session", {});
@@ -23,6 +23,10 @@ export async function GET(request: Request) {
   }
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
-  const url = new URL("/sign-in?signedOut=1", request.url);
-  return NextResponse.redirect(url);
+  // Relative Location on purpose: behind the deploy proxy, request.url is the
+  // container's internal origin (localhost:3000), not the public host.
+  return new NextResponse(null, {
+    status: 303,
+    headers: { Location: "/sign-in?signedOut=1" },
+  });
 }
