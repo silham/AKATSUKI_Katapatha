@@ -5,3 +5,5 @@
 **/.expo
 .git
 apps/mobile
+.osrm
+Screens

@@ -1,0 +1,117 @@
+# Katapatha on Coolify, with the OpenStreetMap road network (OSRM).
+#
+# Coolify's Traefik terminates HTTPS and forwards to `proxy` (Caddy, port 80),
+# which keeps web and API on one origin: /v1/* to the API, the rest to the web
+# app. Give your domain to the `proxy` service only. Nothing publishes a host
+# port; the database and OSRM are reachable only inside this stack.
+#
+# Set in Coolify's environment variables:
+#   POSTGRES_PASSWORD   required, a long random value
+#   ALLOW_DEMO_ACCESS   0 in production (the /access page is then a 404)
+#
+# Road data: on the first deploy `osrm-download` fetches the Sri Lanka extract
+# (~150 MB) and `osrm-prepare` builds the routing graph (a few minutes, ~2-4 GB
+# RAM) into the `osrm-data` volume. Later deploys find it there and skip both.
+# To refresh the roads, delete the `.ready` file in that volume (or the volume)
+# and redeploy. Until the data is ready, the API plans on straight-line
+# estimates and the map draws dashed lines; it never fails because of it.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: katapatha
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: katapatha
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U katapatha -d katapatha"]
+      interval: 5s
+      retries: 30
+    restart: unless-stopped
+
+  osrm-download:
+    image: alpine:3.20
+    volumes:
+      - osrm-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        if [ -f /data/.ready ] || [ -s /data/sri-lanka-latest.osm.pbf ]; then
+          echo "[osrm-download] extract already present"; exit 0
+        fi
+        echo "[osrm-download] downloading the Sri Lanka extract..."
+        wget -q -O /data/sri-lanka-latest.osm.pbf.part https://download.geofabrik.de/asia/sri-lanka-latest.osm.pbf
+        mv /data/sri-lanka-latest.osm.pbf.part /data/sri-lanka-latest.osm.pbf
+        echo "[osrm-download] done"
+    restart: "no"
+
+  osrm-prepare:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    depends_on:
+      osrm-download: { condition: service_completed_successfully }
+    volumes:
+      - osrm-data:/data
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -eu
+        if [ -f /data/.ready ]; then echo "[osrm-prepare] road graph already built"; exit 0; fi
+        echo "[osrm-prepare] extract (car profile)..."
+        osrm-extract -p /opt/car.lua /data/sri-lanka-latest.osm.pbf
+        echo "[osrm-prepare] partition..."
+        osrm-partition /data/sri-lanka-latest.osrm
+        echo "[osrm-prepare] customize..."
+        osrm-customize /data/sri-lanka-latest.osrm
+        touch /data/.ready
+        echo "[osrm-prepare] done"
+    restart: "no"
+
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    depends_on:
+      osrm-prepare: { condition: service_completed_successfully }
+    command: osrm-routed --algorithm mld --max-table-size 1000 /data/sri-lanka-latest.osrm
+    volumes:
+      - osrm-data:/data:ro
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://katapatha:${POSTGRES_PASSWORD}@db:5432/katapatha?schema=public
+      NODE_ENV: production
+      PORT: 3001
+      ALLOW_DEMO_ACCESS: ${ALLOW_DEMO_ACCESS:-0}
+      OSRM_URL: http://osrm:5000
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on: [api]
+    environment:
+      NODE_ENV: production
+      API_BASE_URL: http://api:3001/v1
+      ALLOW_DEMO_ACCESS: ${ALLOW_DEMO_ACCESS:-0}
+    restart: unless-stopped
+
+  proxy:
+    build:
+      context: .
+      dockerfile: deploy/proxy.Dockerfile
+    depends_on: [web, api]
+    expose:
+      - "80"
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  osrm-data:
